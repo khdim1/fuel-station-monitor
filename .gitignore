@@ -46,3 +46,4 @@ temp/
 # Backup files
 *.bak
 *.backup
+node_modules/
