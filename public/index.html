@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#e67e22">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Station Fuel - Suivi capteurs</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #2c3e50, #e67e22);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.2);
+            width: 350px;
+            text-align: center;
+        }
+        h1, h2, h3 { color: #2c3e50; }
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+        }
+        button {
+            background: #e67e22;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { background: #d35400; }
+        .error { color: #e74c3c; margin-top: 10px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; border-bottom: 1px solid #ddd; }
+        .tab { padding: 10px 20px; cursor: pointer; background: #f8f9fa; border-radius: 5px 5px 0 0; }
+        .tab.active { background: #e67e22; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .filters { display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin: 20px 0; }
+        .stats, .pump-stats { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
+        .card { background: #f9f9f9; border-radius: 8px; padding: 20px; flex: 1; min-width: 200px; border-left: 4px solid #e67e22; }
+        .card .value { font-size: 28px; font-weight: bold; color: #2c3e50; }
+        canvas { max-width: 100%; margin-top: 20px; background: white; border-radius: 8px; padding: 10px; }
+        .logout-btn { float: right; background: #e74c3c; margin-bottom: 10px; width: auto; padding: 8px 16px; }
+        .auto-refresh { background: #f1c40f; margin-left: 20px; width: auto; }
+        .auto-refresh.active { background: #27ae60; }
+        .alert { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px; }
+        @media (max-width: 768px) { .filters { flex-direction: column; } }
+    </style>
+</head>
+<body>
+    <div id="loginContainer" class="login-card">
+        <h1>⛽ Station Fuel</h1>
+        <input type="text" id="username" placeholder="Nom d'utilisateur">
+        <input type="password" id="password" placeholder="Mot de passe">
+        <button onclick="login()">Se connecter</button>
+        <div id="errorMsg" class="error"></div>
+        <div class="footer">Gestion carburant - Capteurs automatiques</div>
+    </div>
+
+    <div id="dashboardContainer" class="dashboard-container">
+        <div id="reportContent">
+            <div style="overflow: auto; display: flex; justify-content: space-between; align-items: center;">
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <img id="stationLogo" src="/icons/default-logo.png" alt="Logo" style="height: 50px;">
+        <h1 id="stationName">⛽ Suivi station-service</h1>
+    </div>
+    <button class="logout-btn" onclick="logout()">Déconnexion</button>
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+    <img id="stationLogo" src="" alt="Logo" style="height: 50px; display: none;">
+    <h2 id="stationName" style="margin: 0; color: #2c3e50;"></h2>
+</div>
+</div>
+            <div id="alertMessage" style="display:none;" class="alert"></div>
+            <div id="currentMonthSummary" class="stats"></div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <div class="tabs">
+                    <div class="tab active" data-tab="daily">📅 Journalier</div>
+                    <div class="tab" data-tab="weekly">📆 Hebdomadaire</div>
+                    <div class="tab" data-tab="comparison">📊 Comparaison mensuelle</div>
+                    <div class="tab" data-tab="stats">📈 Stats & Seuils</div>
+                    <div class="tab" data-tab="invoice">🧾 Facture</div>
+                    <div class="tab" data-tab="pumps">⛽ Détail par pompe</div>
+                </div>
+                <button id="autoRefreshBtn" class="auto-refresh" onclick="toggleAutoRefresh()">🔄 Auto OFF</button>
+            </div>
+
+            <!-- Onglet Journalier -->
+            <div id="daily" class="tab-content active">
+                <div class="filters">
+                    <div><label>Du :</label><input type="date" id="dailyStart"></div>
+                    <div><label>Au :</label><input type="date" id="dailyEnd"></div>
+                    <div><label>Pompe :</label><select id="dailyPump"><option value="">Toutes</option></select></div>
+                    <button onclick="loadDaily()">Actualiser</button>
+                    <button class="export" onclick="exportPDF()">📄 Exporter rapport</button>
+                </div>
+                <canvas id="dailyChart" width="800" height="400"></canvas>
+            </div>
+
+            <!-- Hebdomadaire -->
+            <div id="weekly" class="tab-content">
+                <div class="filters">
+                    <div><label>Année :</label><input type="number" id="weekYear" value="2026"></div>
+                    <div><label>Pompe :</label><select id="weeklyPump"><option value="">Toutes</option></select></div>
+                    <button onclick="loadWeekly()">Afficher</button>
+                </div>
+                <canvas id="weeklyChart" width="800" height="400"></canvas>
+            </div>
+
+            <!-- Comparaison mensuelle -->
+            <div id="comparison" class="tab-content">
+                <div class="filters">
+                    <div><label>Mois :</label><input type="month" id="compareMonth"></div>
+                    <div><label>Pompe :</label><select id="comparePump"><option value="">Toutes</option></select></div>
+                    <button onclick="loadComparison()">Comparer</button>
+                </div>
+                <div id="comparisonResult" class="stats"></div>
+            </div>
+
+            <!-- Stats & Seuils -->
+            <div id="stats" class="tab-content">
+                <div class="filters">
+                    <div><label>Du :</label><input type="date" id="statsStart"></div>
+                    <div><label>Au :</label><input type="date" id="statsEnd"></div>
+                    <div><label>Pompe :</label><select id="statsPump"><option value="">Toutes</option></select></div>
+                    <button onclick="loadStats()">Calculer</button>
+                </div>
+                <div id="statsResult" class="stats"></div>
+                <h3>⚙️ Seuils d'alerte (litres / mois)</h3>
+                <div class="filters">
+                    <div>Gazoil : <input type="number" id="dieselThreshold" step="100"></div>
+                    <div>Essence : <input type="number" id="gasolineThreshold" step="100"></div>
+                    <button onclick="saveThresholds()">Enregistrer</button>
+                </div>
+                <p id="thresholdStatus"></p>
+            </div>
+
+            <!-- Facture -->
+            <div id="invoice" class="tab-content">
+                <div class="filters">
+                    <div><label>Mois :</label><input type="month" id="invoiceMonth"></div>
+                    <div><label>Pompe :</label><select id="invoicePump"><option value="">Toutes</option></select></div>
+                    <button onclick="loadInvoice()">Calculer facture</button>
+                    <button class="export" onclick="exportInvoicePDF()">📄 Exporter PDF</button>
+                </div>
+                <div id="invoiceResult" class="invoice" style="background:#fff;padding:20px;border-radius:8px;"></div>
+            </div>
+
+            <!-- Détail par pompe -->
+            <div id="pumps" class="tab-content">
+                <div class="filters">
+                    <div><label>Du :</label><input type="date" id="pumpStart"></div>
+                    <div><label>Au :</label><input type="date" id="pumpEnd"></div>
+                    <button onclick="loadPumpStats()">Afficher statistiques par pompe</button>
+                </div>
+                <div id="pumpStatsResult" class="pump-stats"></div>
+            </div>
+
+            <footer>Données automatiques des capteurs - Mise à jour toutes les 30s</footer>
+        </div>
+    </div>
+
+    <script>
+        let dailyChart, weeklyChart;
+        let autoRefreshInterval = null;
+        let autoRefresh = false;
+
+        async function apiFetch(url, options = {}) {
+            options.credentials = 'include';
+            const res = await fetch(url, options);
+            if (res.status === 401) {
+                document.getElementById('dashboardContainer').style.display = 'none';
+                document.getElementById('loginContainer').style.display = 'flex';
+                if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+                autoRefresh = false;
+                return null;
+            }
+            return res;
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            if (!username || !password) {
+                document.getElementById('errorMsg').innerText = 'Veuillez remplir tous les champs';
+                return;
+            }
+            try {
+                const res = await apiFetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (res && res.ok) {
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('dashboardContainer').style.display = 'block';
+                    initDashboard();
+                } else if (res) {
+                    const data = await res.json();
+                    document.getElementById('errorMsg').innerText = data.error || 'Identifiants incorrects';
+                }
+            } catch (err) {
+                document.getElementById('errorMsg').innerText = 'Erreur de connexion';
+            }
+        }
+
+        async function logout() {
+            await apiFetch('/api/logout', { method: 'POST' });
+            document.getElementById('dashboardContainer').style.display = 'none';
+            document.getElementById('loginContainer').style.display = 'flex';
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefresh = false;
+        }
+
+        async function loadPumps(selectElementId) {
+            const res = await apiFetch('/api/pumps');
+            if (!res) return [];
+            const pumps = await res.json();
+            const select = document.getElementById(selectElementId);
+            if (select) {
+                select.innerHTML = '<option value="">Toutes les pompes</option>';
+                pumps.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.textContent = `Pompe ${p.pump_number} (${p.fuel_type === 'diesel' ? 'Gazoil' : 'Essence'})`;
+                    select.appendChild(option);
+                });
+            }
+            return pumps;
+        }
+
+        async function initDashboard() {
+            await loadPumps('dailyPump');
+            await loadPumps('weeklyPump');
+            await loadPumps('comparePump');
+            await loadPumps('statsPump');
+            await loadPumps('invoicePump');
+            await loadStationInfo();
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+            const lastDay = new Date(year, month+1, 0).toISOString().split('T')[0];
+            document.getElementById('dailyStart').value = firstDay;
+            document.getElementById('dailyEnd').value = lastDay;
+            document.getElementById('statsStart').value = firstDay;
+            document.getElementById('statsEnd').value = lastDay;
+            document.getElementById('pumpStart').value = firstDay;
+            document.getElementById('pumpEnd').value = lastDay;
+            const currentMonth = `${year}-${String(month+1).padStart(2,'0')}`;
+            document.getElementById('compareMonth').value = currentMonth;
+            document.getElementById('invoiceMonth').value = currentMonth;
+            document.getElementById('weekYear').value = year;
+
+            await loadCurrentMonth();
+            await loadDaily();
+            await loadWeekly();
+            await loadComparison();
+            await loadStats();
+            await loadThresholds();
+            await loadPumpStats();
+            await checkAlerts();
+            await loadStationInfo();
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.removeEventListener('click', handleTabClick);
+                tab.addEventListener('click', handleTabClick);
+            });
+        }
+
+        function handleTabClick(e) {
+            const tab = e.currentTarget;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
+        }
+
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('autoRefreshBtn');
+            if (autoRefresh) {
+                clearInterval(autoRefreshInterval);
+                autoRefresh = false;
+                btn.textContent = '🔄 Auto OFF';
+                btn.classList.remove('active');
+            } else {
+                autoRefreshInterval = setInterval(() => {
+                    loadCurrentMonth();
+                    loadDaily();
+                    loadWeekly();
+                    loadComparison();
+                    loadStats();
+                    loadInvoice();
+                    loadPumpStats();
+                    checkAlerts();
+                }, 30000);
+                autoRefresh = true;
+                btn.textContent = '🔄 Auto ON (30s)';
+                btn.classList.add('active');
+            }
+        }
+
+        async function loadCurrentMonth() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth()+1).padStart(2,'0');
+            const res = await apiFetch(`/api/stats/monthly?year=${year}&month=${month}`);
+            if (!res) return;
+            const data = await res.json();
+            document.getElementById('currentMonthSummary').innerHTML = `
+                <div class="card"><h3>📆 Mois en cours</h3>
+                <div>⛽ Gazoil : ${data.diesel_liters.toFixed(2)} L</div>
+                <div>⛽ Essence : ${data.gasoline_liters.toFixed(2)} L</div>
+                <div><strong>💰 Total : ${data.total_fcfa.toLocaleString()} FCFA</strong></div></div>
+                <div class="card"><h3>💸 Détail coût</h3>
+                <div>Gazoil : ${data.cost_diesel.toLocaleString()} FCFA</div>
+                <div>Essence : ${data.cost_gasoline.toLocaleString()} FCFA</div></div>
+            `;
+        }
+async function loadStationInfo() {
+    const res = await apiFetch('/api/station_info');
+    if (!res) return;
+    const data = await res.json();
+    document.getElementById('stationName').innerHTML = `⛽ ${data.name}`;
+    if (data.logo_url) {
+        document.getElementById('stationLogo').src = data.logo_url;
+    }
+}
+        async function loadDaily() {
+            const start = document.getElementById('dailyStart').value;
+            const end = document.getElementById('dailyEnd').value;
+            const pumpId = document.getElementById('dailyPump').value;
+            if (!start || !end) return;
+            const url = `/api/stats/daily?start=${start}&end=${end}${pumpId ? '&pump_id='+pumpId : ''}`;
+            const res = await apiFetch(url);
+            if (!res) return;
+            const data = await res.json();
+            if (dailyChart) dailyChart.destroy();
+            const ctx = document.getElementById('dailyChart').getContext('2d');
+            dailyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [
+                        { label: 'Gazoil (litres)', data: data.diesel, borderColor: '#e67e22', backgroundColor: 'rgba(230,126,34,0.1)', fill: true, tension: 0.2 },
+                        { label: 'Essence (litres)', data: data.gasoline, borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', fill: true, tension: 0.2 }
+                    ]
+                },
+                options: { responsive: true, scales: { y: { beginAtZero: true, title: { display: true, text: 'Litres' } } } }
+            });
+        }
+
+        async function loadWeekly() {
+            const year = document.getElementById('weekYear').value;
+            const pumpId = document.getElementById('weeklyPump').value;
+            const url = `/api/stats/weekly?year=${year}${pumpId ? '&pump_id='+pumpId : ''}`;
+            const res = await apiFetch(url);
+            if (!res) return;
+            const data = await res.json();
+            if (weeklyChart) weeklyChart.destroy();
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            weeklyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.weeks.map(w => `Semaine ${w}`),
+                    datasets: [
+                        { label: 'Gazoil (L)', data: data.diesel, backgroundColor: '#e67e22' },
+                        { label: 'Essence (L)', data: data.gasoline, backgroundColor: '#3498db' }
+                    ]
+                },
+                options: { responsive: true, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        async function loadComparison() {
+            const month = document.getElementById('compareMonth').value;
+            const pumpId = document.getElementById('comparePump').value;
+            if (!month) return;
+            const [year, monthNum] = month.split('-');
+            const url = `/api/stats/monthly_comparison?year=${year}&month=${monthNum}${pumpId ? '&pump_id='+pumpId : ''}`;
+            const res = await apiFetch(url);
+            if (!res) return;
+            const data = await res.json();
+            document.getElementById('comparisonResult').innerHTML = `
+                <div class="card"><h3>📆 Mois sélectionné</h3><div class="value">${data.current.toFixed(2)} L</div></div>
+                <div class="card"><h3>📅 Mois précédent</h3><div class="value">${data.previous.toFixed(2)} L</div></div>
+                <div class="card"><h3>📈 Variation</h3><div class="value">${data.variation > 0 ? '+' : ''}${data.variation.toFixed(2)} L (${data.variation_percent.toFixed(1)}%)</div></div>
+            `;
+        }
+async function loadStationInfo() {
+    const res = await apiFetch('/api/station_info');
+    if (!res) return;
+    const data = await res.json();
+    document.getElementById('stationName').innerText = data.name;
+    if (data.logo_url) {
+        const logoImg = document.getElementById('stationLogo');
+        logoImg.src = data.logo_url;
+        logoImg.style.display = 'inline-block';
+    }
+}
+        async function loadStats() {
+            const start = document.getElementById('statsStart').value;
+            const end = document.getElementById('statsEnd').value;
+            const pumpId = document.getElementById('statsPump').value;
+            if (!start || !end) return;
+            const url = `/api/stats/average_max?start=${start}&end=${end}${pumpId ? '&pump_id='+pumpId : ''}`;
+            const res = await apiFetch(url);
+            if (!res) return;
+            const data = await res.json();
+            document.getElementById('statsResult').innerHTML = `
+                <div class="card"><h3>📊 Moyenne journalière</h3><div class="value">${data.avg_liters_per_day} L</div></div>
+                <div class="card"><h3>📈 Maximum journalier</h3><div class="value">${data.max_liters_per_day} L</div></div>
+            `;
+        }
+
+        async function loadThresholds() {
+            const res = await apiFetch('/api/thresholds');
+            if (!res) return;
+            const data = await res.json();
+            document.getElementById('dieselThreshold').value = data.diesel_threshold;
+            document.getElementById('gasolineThreshold').value = data.gasoline_threshold;
+        }
+
+        async function saveThresholds() {
+            const diesel = parseFloat(document.getElementById('dieselThreshold').value);
+            const gasoline = parseFloat(document.getElementById('gasolineThreshold').value);
+            if (isNaN(diesel) || isNaN(gasoline)) return;
+            const res = await apiFetch('/api/thresholds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ diesel_threshold: diesel, gasoline_threshold: gasoline })
+            });
+            if (res && res.ok) {
+                document.getElementById('thresholdStatus').innerText = '✅ Seuils enregistrés';
+                setTimeout(() => document.getElementById('thresholdStatus').innerText = '', 2000);
+                checkAlerts();
+            }
+        }
+
+        async function checkAlerts() {
+            const resThreshold = await apiFetch('/api/thresholds');
+            if (!resThreshold) return;
+            const thresholds = await resThreshold.json();
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth()+1).padStart(2,'0');
+            const resMonth = await apiFetch(`/api/stats/monthly?year=${year}&month=${month}`);
+            if (!resMonth) return;
+            const monthData = await resMonth.json();
+            const alerts = [];
+            if (monthData.diesel_liters > thresholds.diesel_threshold) alerts.push(`⚠️ Gazoil : ${monthData.diesel_liters} L dépasse le seuil (${thresholds.diesel_threshold} L)`);
+            if (monthData.gasoline_liters > thresholds.gasoline_threshold) alerts.push(`⚠️ Essence : ${monthData.gasoline_liters} L dépasse le seuil (${thresholds.gasoline_threshold} L)`);
+            const alertDiv = document.getElementById('alertMessage');
+            if (alerts.length) {
+                alertDiv.innerHTML = alerts.join('<br>');
+                alertDiv.style.display = 'block';
+            } else alertDiv.style.display = 'none';
+        }
+
+        async function loadInvoice() {
+            const month = document.getElementById('invoiceMonth').value;
+            const pumpId = document.getElementById('invoicePump').value;
+            if (!month) return;
+            const [year, monthNum] = month.split('-');
+            let url = `/api/stats/monthly?year=${year}&month=${monthNum}`;
+            if (pumpId) url += `&pump_id=${pumpId}`;
+            const res = await apiFetch(url);
+            if (!res) return;
+            const data = await res.json();
+            const date = new Date(year, monthNum-1, 1);
+            const monthName = date.toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
+            document.getElementById('invoiceResult').innerHTML = `
+                <div style="border:1px solid #ddd;border-radius:8px;padding:20px;">
+                    <h2 style="text-align:center;">FACTURE MENSUELLE</h2>
+                    <p style="text-align:center;">${monthName}</p><hr>
+                    <div><strong>⛽ Gazoil</strong> : ${data.diesel_liters.toFixed(2)} L → ${data.cost_diesel.toLocaleString()} FCFA</div>
+                    <div><strong>⛽ Essence</strong> : ${data.gasoline_liters.toFixed(2)} L → ${data.cost_gasoline.toLocaleString()} FCFA</div>
+                    <hr><div style="font-size:20px;font-weight:bold;">TOTAL TTC : ${data.total_fcfa.toLocaleString()} FCFA</div>
+                    <p style="font-size:12px;">Tarifs : Gazoil 600 FCFA/L, Essence 650 FCFA/L</p>
+                </div>
+            `;
+        }
+
+        async function loadPumpStats() {
+            const start = document.getElementById('pumpStart').value;
+            const end = document.getElementById('pumpEnd').value;
+            if (!start || !end) return;
+            const res = await apiFetch(`/api/stats/pumps?start=${start}&end=${end}`);
+            if (!res) return;
+            const data = await res.json();
+            if (data.length === 0) {
+                document.getElementById('pumpStatsResult').innerHTML = '<div class="card">Aucune donnée sur cette période</div>';
+                return;
+            }
+            let html = '';
+            let totalLiters = 0;
+            let totalAmount = 0;
+            data.forEach(p => {
+                totalLiters += p.liters;
+                totalAmount += p.amount;
+                html += `
+                    <div class="card">
+                        <h3>Pompe ${p.pump_number} (${p.fuel_type === 'diesel' ? 'Gazoil' : 'Essence'})</h3>
+                        <div class="value">${p.liters.toFixed(2)} L</div>
+                        <div>💰 ${p.amount.toLocaleString()} FCFA</div>
+                    </div>
+                `;
+            });
+            html += `
+                <div class="card" style="background:#e67e22; color:white;">
+                    <h3>📊 TOTAL STATION</h3>
+                    <div class="value">${totalLiters.toFixed(2)} L</div>
+                    <div>💰 ${totalAmount.toLocaleString()} FCFA</div>
+                </div>
+            `;
+            document.getElementById('pumpStatsResult').innerHTML = html;
+        }
+
+        async function exportPDF() {
+            const { jsPDF } = window.jspdf;
+            const element = document.getElementById('reportContent');
+            try {
+                const canvas = await html2canvas(element, { scale: 2 });
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 190;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                pdf.save('rapport_station.pdf');
+            } catch (err) { alert('Erreur génération PDF'); }
+        }
+
+        async function exportInvoicePDF() {
+            const invoiceDiv = document.getElementById('invoiceResult');
+            if (!invoiceDiv.innerHTML.trim()) { alert("Calculez d'abord la facture."); return; }
+            const temp = document.createElement('div');
+            temp.style.padding = '20px';
+            temp.style.backgroundColor = 'white';
+            temp.style.width = '800px';
+            temp.appendChild(invoiceDiv.cloneNode(true));
+            document.body.appendChild(temp);
+            try {
+                const { jsPDF } = window.jspdf;
+                const canvas = await html2canvas(temp, { scale: 2 });
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 190;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                pdf.save('facture_carburant.pdf');
+            } catch (err) { alert('Erreur PDF facture'); }
+            finally { document.body.removeChild(temp); }
+        }
+
+        document.getElementById('password').addEventListener('keypress', e => { if(e.key === 'Enter') login(); });
+        checkAuth();
+        async function checkAuth() {
+            const res = await apiFetch('/api/check_auth');
+            if (res && res.ok) {
+                const data = await res.json();
+                if (data.authenticated) {
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('dashboardContainer').style.display = 'block';
+                    initDashboard();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
