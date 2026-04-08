@@ -2,7 +2,8 @@ const CACHE_NAME = 'fuel-station-v1';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icons/icon-192x192.png'
 ];
 
 self.addEventListener('install', event => {
