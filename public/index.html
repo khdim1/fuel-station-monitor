@@ -70,6 +70,19 @@
         .auto-refresh { background: #f1c40f; margin-left: 20px; width: auto; }
         .auto-refresh.active { background: #27ae60; }
         .alert { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px; }
+        .install-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #e67e22;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 999;
+            display: none;
+        }
         @media (max-width: 768px) { .filters { flex-direction: column; } }
     </style>
 </head>
@@ -86,16 +99,12 @@
     <div id="dashboardContainer" class="dashboard-container">
         <div id="reportContent">
             <div style="overflow: auto; display: flex; justify-content: space-between; align-items: center;">
-    <div style="display: flex; align-items: center; gap: 15px;">
-        <img id="stationLogo" src="/icons/default-logo.png" alt="Logo" style="height: 50px;">
-        <h1 id="stationName">⛽ Suivi station-service</h1>
-    </div>
-    <button class="logout-btn" onclick="logout()">Déconnexion</button>
-    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-    <img id="stationLogo" src="" alt="Logo" style="height: 50px; display: none;">
-    <h2 id="stationName" style="margin: 0; color: #2c3e50;"></h2>
-</div>
-</div>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <img id="stationLogo" src="/icons/default-logo.png" alt="Logo" style="height: 50px;">
+                    <h1 id="stationName">⛽ Suivi station-service</h1>
+                </div>
+                <button class="logout-btn" onclick="logout()">Déconnexion</button>
+            </div>
             <div id="alertMessage" style="display:none;" class="alert"></div>
             <div id="currentMonthSummary" class="stats"></div>
 
@@ -186,11 +195,40 @@
         </div>
     </div>
 
+    <button id="installBtn" class="install-btn">📲 Installer l'application</button>
+
     <script>
         let dailyChart, weeklyChart;
         let autoRefreshInterval = null;
         let autoRefresh = false;
+        let deferredPrompt = null;
 
+        // ---- Service Worker & PWA ----
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('Service Worker enregistré', reg))
+                    .catch(err => console.error('Erreur SW', err));
+            });
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('installBtn').style.display = 'block';
+        });
+
+        document.getElementById('installBtn').addEventListener('click', () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => {
+                    deferredPrompt = null;
+                    document.getElementById('installBtn').style.display = 'none';
+                });
+            }
+        });
+
+        // ---- API fetch avec gestion 401 ----
         async function apiFetch(url, options = {}) {
             options.credentials = 'include';
             const res = await fetch(url, options);
@@ -204,6 +242,7 @@
             return res;
         }
 
+        // ---- Authentification ----
         async function login() {
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
@@ -238,6 +277,7 @@
             autoRefresh = false;
         }
 
+        // ---- Chargement des pompes dans les listes déroulantes ----
         async function loadPumps(selectElementId) {
             const res = await apiFetch('/api/pumps');
             if (!res) return [];
@@ -255,6 +295,23 @@
             return pumps;
         }
 
+        // ---- Informations de la station (nom + logo) ----
+        async function loadStationInfo() {
+            const res = await apiFetch('/api/station_info');
+            if (!res) return;
+            const data = await res.json();
+            const nameElem = document.getElementById('stationName');
+            if (nameElem) nameElem.innerHTML = `⛽ ${data.name || 'Station'}`;
+            const logoImg = document.getElementById('stationLogo');
+            if (logoImg && data.logo_url) {
+                logoImg.src = data.logo_url;
+                logoImg.style.display = 'inline-block';
+            } else if (logoImg) {
+                logoImg.style.display = 'none';
+            }
+        }
+
+        // ---- Initialisation du tableau de bord ----
         async function initDashboard() {
             await loadPumps('dailyPump');
             await loadPumps('weeklyPump');
@@ -262,6 +319,7 @@
             await loadPumps('statsPump');
             await loadPumps('invoicePump');
             await loadStationInfo();
+
             const now = new Date();
             const year = now.getFullYear();
             const month = now.getMonth();
@@ -286,7 +344,7 @@
             await loadThresholds();
             await loadPumpStats();
             await checkAlerts();
-            await loadStationInfo();
+
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.removeEventListener('click', handleTabClick);
                 tab.addEventListener('click', handleTabClick);
@@ -342,15 +400,7 @@
                 <div>Essence : ${data.cost_gasoline.toLocaleString()} FCFA</div></div>
             `;
         }
-async function loadStationInfo() {
-    const res = await apiFetch('/api/station_info');
-    if (!res) return;
-    const data = await res.json();
-    document.getElementById('stationName').innerHTML = `⛽ ${data.name}`;
-    if (data.logo_url) {
-        document.getElementById('stationLogo').src = data.logo_url;
-    }
-}
+
         async function loadDaily() {
             const start = document.getElementById('dailyStart').value;
             const end = document.getElementById('dailyEnd').value;
@@ -412,17 +462,7 @@ async function loadStationInfo() {
                 <div class="card"><h3>📈 Variation</h3><div class="value">${data.variation > 0 ? '+' : ''}${data.variation.toFixed(2)} L (${data.variation_percent.toFixed(1)}%)</div></div>
             `;
         }
-async function loadStationInfo() {
-    const res = await apiFetch('/api/station_info');
-    if (!res) return;
-    const data = await res.json();
-    document.getElementById('stationName').innerText = data.name;
-    if (data.logo_url) {
-        const logoImg = document.getElementById('stationLogo');
-        logoImg.src = data.logo_url;
-        logoImg.style.display = 'inline-block';
-    }
-}
+
         async function loadStats() {
             const start = document.getElementById('statsStart').value;
             const end = document.getElementById('statsEnd').value;
@@ -501,7 +541,7 @@ async function loadStationInfo() {
                     <div><strong>⛽ Gazoil</strong> : ${data.diesel_liters.toFixed(2)} L → ${data.cost_diesel.toLocaleString()} FCFA</div>
                     <div><strong>⛽ Essence</strong> : ${data.gasoline_liters.toFixed(2)} L → ${data.cost_gasoline.toLocaleString()} FCFA</div>
                     <hr><div style="font-size:20px;font-weight:bold;">TOTAL TTC : ${data.total_fcfa.toLocaleString()} FCFA</div>
-                    <p style="font-size:12px;">Tarifs : Gazoil 600 FCFA/L, Essence 650 FCFA/L</p>
+                    <p style="font-size:12px;">Tarifs : Gazoil 680 FCFA/L, Essence 920 FCFA/L</p>
                 </div>
             `;
         }
@@ -579,6 +619,7 @@ async function loadStationInfo() {
 
         document.getElementById('password').addEventListener('keypress', e => { if(e.key === 'Enter') login(); });
         checkAuth();
+
         async function checkAuth() {
             const res = await apiFetch('/api/check_auth');
             if (res && res.ok) {
