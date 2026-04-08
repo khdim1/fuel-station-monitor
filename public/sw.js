@@ -1,8 +1,19 @@
+const CACHE_NAME = 'fuel-station-v1';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/manifest.json'
+];
+
 self.addEventListener('install', event => {
-    console.log('Service Worker installé');
-    self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+  );
+  self.skipWaiting();
 });
+
 self.addEventListener('fetch', event => {
-    // Stratégie simple : réseau d'abord
-    event.respondWith(fetch(event.request));
+  event.respondWith(
+    caches.match(event.request).then(response => response || fetch(event.request))
+  );
 });
