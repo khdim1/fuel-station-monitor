@@ -142,9 +142,10 @@ app.get('/api/stations', requireAuth, async (req, res) => {
             [req.userId]
         );
         if (allowed.length === 0) {
-            // Aucune station assignée : retourner une liste vide (le superadmin ne voit rien)
-            return res.json([]);
-        }
+    // Aucune station assignée : renvoyer toutes les stations
+    const [allStations] = await pool.query('SELECT id, name, location FROM stations ORDER BY id');
+    return res.json(allStations);
+}
         const stationIds = allowed.map(a => a.station_id);
         const [rows] = await pool.query('SELECT id, name, location FROM stations WHERE id IN (?) ORDER BY id', [stationIds]);
         res.json(rows);
