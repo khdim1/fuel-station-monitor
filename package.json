@@ -7,11 +7,16 @@
     "postinstall": "npm rebuild bcrypt --build-from-source"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "mysql2": "^3.6.0",
-    "bcrypt": "^5.1.1",
-    "dotenv": "^16.3.1",
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "express-session": "^1.17.3"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "mysql2": "^3.6.0",
+    "sharp": "^0.34.5"
   }
 }
