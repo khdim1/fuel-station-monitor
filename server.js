@@ -33,7 +33,10 @@ const pool = mysql.createPool({
     waitForConnections: true,
     connectionLimit: 10,
     connectTimeout: 30000,
-    enableKeepAlive: true
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+    acquireTimeout: 30000,
+    timeout: 60000
 });
 
 async function checkConnection() {
@@ -49,30 +52,39 @@ async function checkConnection() {
 }
 checkConnection();
 
-function requireAuth(req, res, next) {
+// Middleware d'authentification
+async function requireAuth(req, res, next) {
     if (!req.session.userId) return res.status(401).json({ error: 'Non authentifié' });
-    req.userId = req.session.userId;
-    next();
+    try {
+        const [rows] = await pool.query('SELECT id, station_id, role FROM users WHERE id = ?', [req.session.userId]);
+        if (rows.length === 0) return res.status(401).json({ error: 'Utilisateur introuvable' });
+        req.userId = rows[0].id;
+        req.userRole = rows[0].role;
+        req.userStationId = rows[0].station_id;
+        next();
+    } catch (err) {
+        console.error('Erreur requireAuth:', err);
+        res.status(500).json({ error: 'Erreur interne' });
+    }
 }
 
-async function getStationId(userId) {
-    const [rows] = await pool.query('SELECT station_id FROM users WHERE id = ?', [userId]);
-    return rows[0]?.station_id;
+async function getEffectiveStationId(req) {
+    if (req.userRole === 'super_admin') {
+        return req.session.selectedStationId || null;
+    } else {
+        return req.userStationId;
+    }
 }
 
-// --- Route pour les capteurs (sans authentification, ou avec clé API si besoin) ---
-// Ici on suppose que les capteurs sont physiquement sécurisés, on ajoute une vérification simple par clé
-// Pour simplifier, on accepte sans auth mais on vérifie que la pompe appartient à une station existante.
+// --- Capteurs (publique) ---
 app.post('/api/sensor/:pump_id', async (req, res) => {
     const pump_id = parseInt(req.params.pump_id);
-    const { liters, api_key } = req.body; // liters = volume écoulé depuis dernier relevé (incrément)
+    const { liters, api_key } = req.body;
     if (!liters || liters <= 0) return res.status(400).json({ error: 'Litres invalides' });
-    // Optionnel : vérifier api_key (à définir dans .env)
     if (process.env.SENSOR_API_KEY && api_key !== process.env.SENSOR_API_KEY) {
         return res.status(403).json({ error: 'Clé API invalide' });
     }
     try {
-        // Vérifier que la pompe existe
         const [pump] = await pool.query('SELECT id FROM pumps WHERE id = ?', [pump_id]);
         if (pump.length === 0) return res.status(404).json({ error: 'Pompe inconnue' });
         await pool.query('INSERT INTO fuel_readings (pump_id, liters, timestamp) VALUES (?, ?, NOW())', [pump_id, liters]);
@@ -83,17 +95,21 @@ app.post('/api/sensor/:pump_id', async (req, res) => {
     }
 });
 
-// --- Routes d'authentification (inchangées) ---
+// --- Authentification ---
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Champs requis' });
     try {
-        const [rows] = await pool.query('SELECT id, password_hash FROM users WHERE username = ?', [username]);
+        const [rows] = await pool.query('SELECT id, password_hash, role FROM users WHERE username = ?', [username]);
         if (rows.length === 0) return res.status(401).json({ error: 'Identifiants invalides' });
         const match = await bcrypt.compare(password, rows[0].password_hash);
         if (!match) return res.status(401).json({ error: 'Identifiants invalides' });
         req.session.userId = rows[0].id;
-        res.json({ success: true });
+        req.session.userRole = rows[0].role;
+        if (rows[0].role === 'super_admin') {
+            req.session.selectedStationId = null;
+        }
+        res.json({ success: true, role: rows[0].role });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -105,12 +121,66 @@ app.post('/api/logout', (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/api/check_auth', (req, res) => {
-    res.json({ authenticated: !!req.session.userId });
+app.get('/api/check_auth', async (req, res) => {
+    if (!req.session.userId) return res.json({ authenticated: false });
+    try {
+        const [rows] = await pool.query('SELECT role FROM users WHERE id = ?', [req.session.userId]);
+        const role = rows.length ? rows[0].role : null;
+        res.json({ authenticated: true, role });
+    } catch (err) {
+        res.json({ authenticated: false });
+    }
 });
+
+// --- Gestion des stations pour super admin (avec restriction) ---
+app.get('/api/stations', requireAuth, async (req, res) => {
+    if (req.userRole !== 'super_admin') return res.status(403).json({ error: 'Accès refusé' });
+    try {
+        // Récupérer les stations autorisées pour ce superadmin
+        const [allowed] = await pool.query(
+            'SELECT station_id FROM superadmin_stations WHERE user_id = ?',
+            [req.userId]
+        );
+        if (allowed.length === 0) {
+            // Aucune station assignée : retourner une liste vide (le superadmin ne voit rien)
+            return res.json([]);
+        }
+        const stationIds = allowed.map(a => a.station_id);
+        const [rows] = await pool.query('SELECT id, name, location FROM stations WHERE id IN (?) ORDER BY id', [stationIds]);
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/select_station', requireAuth, async (req, res) => {
+    if (req.userRole !== 'super_admin') return res.status(403).json({ error: 'Accès refusé' });
+    const { station_id } = req.body;
+    if (!station_id) {
+        req.session.selectedStationId = null;
+        return res.json({ success: true });
+    }
+    // Vérifier que la station est autorisée pour ce superadmin
+    const [allowed] = await pool.query(
+        'SELECT station_id FROM superadmin_stations WHERE user_id = ? AND station_id = ?',
+        [req.userId, station_id]
+    );
+    if (allowed.length === 0) {
+        return res.status(403).json({ error: 'Station non autorisée' });
+    }
+    const [rows] = await pool.query('SELECT id FROM stations WHERE id = ?', [station_id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Station inexistante' });
+    req.session.selectedStationId = station_id;
+    res.json({ success: true });
+});
+
+// --- Informations station ---
 app.get('/api/station_info', requireAuth, async (req, res) => {
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) {
+        return res.json({ name: 'Aucune station sélectionnée', logo_url: null });
+    }
     try {
         const [rows] = await pool.query('SELECT name, logo_url FROM stations WHERE id = ?', [stationId]);
         if (rows.length === 0) return res.status(404).json({ error: 'Station non trouvée' });
@@ -121,9 +191,10 @@ app.get('/api/station_info', requireAuth, async (req, res) => {
     }
 });
 
+// --- Pompes ---
 app.get('/api/pumps', requireAuth, async (req, res) => {
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json([]);
     try {
         const [rows] = await pool.query('SELECT id, pump_number, fuel_type FROM pumps WHERE station_id = ? ORDER BY pump_number', [stationId]);
         res.json(rows);
@@ -132,12 +203,12 @@ app.get('/api/pumps', requireAuth, async (req, res) => {
     }
 });
 
-// --- NOUVELLE ROUTE : statistiques par pompe sur une période ---
+// --- Statistiques par pompe ---
 app.get('/api/stats/pumps', requireAuth, async (req, res) => {
     const { start, end } = req.query;
     if (!start || !end) return res.status(400).json({ error: 'start et end requis' });
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json([]);
     try {
         const query = `
             SELECT p.id, p.pump_number, p.fuel_type, 
@@ -150,7 +221,7 @@ app.get('/api/stats/pumps', requireAuth, async (req, res) => {
             ORDER BY p.pump_number
         `;
         const [rows] = await pool.query(query, [start, end + ' 23:59:59', stationId]);
-        const prices = { diesel: 600, gasoline: 650 };
+        const prices = { diesel: 680, gasoline: 920 };
         const result = rows.map(r => ({
             pump_number: r.pump_number,
             fuel_type: r.fuel_type,
@@ -164,12 +235,12 @@ app.get('/api/stats/pumps', requireAuth, async (req, res) => {
     }
 });
 
-// --- Statistiques quotidiennes (inchangées) ---
+// --- Statistiques quotidiennes ---
 app.get('/api/stats/daily', requireAuth, async (req, res) => {
     const { start, end, pump_id } = req.query;
     if (!start || !end) return res.status(400).json({ error: 'start et end requis' });
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json({ dates: [], diesel: [], gasoline: [] });
     try {
         let query = `
             SELECT DATE(fr.timestamp) as date, p.fuel_type, SUM(fr.liters) as total_liters
@@ -204,8 +275,8 @@ app.get('/api/stats/daily', requireAuth, async (req, res) => {
 app.get('/api/stats/weekly', requireAuth, async (req, res) => {
     const { year, pump_id } = req.query;
     if (!year) return res.status(400).json({ error: 'year requis' });
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json({ weeks: [], diesel: [], gasoline: [] });
     try {
         let query = `
             SELECT WEEK(fr.timestamp, 3) as week, p.fuel_type, SUM(fr.liters) as total_liters
@@ -235,12 +306,12 @@ app.get('/api/stats/weekly', requireAuth, async (req, res) => {
     }
 });
 
-// --- Statistiques mensuelles (global station) ---
+// --- Statistiques mensuelles ---
 app.get('/api/stats/monthly', requireAuth, async (req, res) => {
     const { year, month, pump_id } = req.query;
     if (!year || !month) return res.status(400).json({ error: 'year et month requis' });
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404). json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json({ diesel_liters: 0, gasoline_liters: 0, cost_diesel: 0, cost_gasoline: 0, total_fcfa: 0 });
     const startDate = `${year}-${month}-01`;
     const endDate = `${year}-${month}-${new Date(year, month, 0).getDate()} 23:59:59`;
     try {
@@ -259,8 +330,8 @@ app.get('/api/stats/monthly', requireAuth, async (req, res) => {
         const [rows] = await pool.query(query, params);
         const dieselLiters = rows.find(r => r.fuel_type === 'diesel')?.total_liters || 0;
         const gasolineLiters = rows.find(r => r.fuel_type === 'gasoline')?.total_liters || 0;
-        const DIESEL_PRICE = 600;
-        const GASOLINE_PRICE = 650;
+        const DIESEL_PRICE = 680;
+        const GASOLINE_PRICE = 920;
         const costDiesel = dieselLiters * DIESEL_PRICE;
         const costGasoline = gasolineLiters * GASOLINE_PRICE;
         res.json({
@@ -279,8 +350,8 @@ app.get('/api/stats/monthly', requireAuth, async (req, res) => {
 app.get('/api/stats/monthly_comparison', requireAuth, async (req, res) => {
     const { year, month, pump_id } = req.query;
     if (!year || !month) return res.status(400).json({ error: 'year et month requis' });
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json({ current: 0, previous: 0, variation: 0, variation_percent: 0 });
     async function getMonthlyTotal(year, month, pump_id) {
         const start = `${year}-${month}-01`;
         const end = `${year}-${month}-${new Date(year, month, 0).getDate()} 23:59:59`;
@@ -322,8 +393,8 @@ app.get('/api/stats/monthly_comparison', requireAuth, async (req, res) => {
 app.get('/api/stats/average_max', requireAuth, async (req, res) => {
     const { start, end, pump_id } = req.query;
     if (!start || !end) return res.status(400).json({ error: 'start et end requis' });
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json({ avg_liters_per_day: 0, max_liters_per_day: 0 });
     try {
         let query = `
             SELECT DATE(fr.timestamp) as date, SUM(fr.liters) as daily_liters
@@ -347,10 +418,10 @@ app.get('/api/stats/average_max', requireAuth, async (req, res) => {
     }
 });
 
-// --- Seuils (inchangés) ---
+// --- Seuils ---
 app.get('/api/thresholds', requireAuth, async (req, res) => {
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json({ diesel_threshold: 1000, gasoline_threshold: 1000 });
     try {
         const [rows] = await pool.query('SELECT diesel_threshold, gasoline_threshold FROM thresholds WHERE station_id = ? ORDER BY id DESC LIMIT 1', [stationId]);
         res.json(rows[0] || { diesel_threshold: 1000, gasoline_threshold: 1000 });
@@ -362,7 +433,7 @@ app.get('/api/thresholds', requireAuth, async (req, res) => {
 app.post('/api/thresholds', requireAuth, async (req, res) => {
     const { diesel_threshold, gasoline_threshold } = req.body;
     if (diesel_threshold === undefined || gasoline_threshold === undefined) return res.status(400).json({ error: 'Champs manquants' });
-    const stationId = await getStationId(req.userId);
+    const stationId = await getEffectiveStationId(req);
     if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
     try {
         await pool.query('INSERT INTO thresholds (station_id, diesel_threshold, gasoline_threshold) VALUES (?, ?, ?)', [stationId, diesel_threshold, gasoline_threshold]);
@@ -372,6 +443,7 @@ app.post('/api/thresholds', requireAuth, async (req, res) => {
     }
 });
 
+// --- Health check ---
 app.get('/health', async (req, res) => {
     try {
         await pool.query('SELECT 1');
@@ -381,19 +453,9 @@ app.get('/health', async (req, res) => {
     }
 });
 
+// --- Serveur frontend ---
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-app.get('/api/station_info', requireAuth, async (req, res) => {
-    const stationId = await getStationId(req.userId);
-    if (!stationId) return res.status(404).json({ error: 'Station non trouvée' });
-    try {
-        const [rows] = await pool.query('SELECT name, location, logo_url FROM stations WHERE id = ?', [stationId]);
-        if (rows.length === 0) return res.status(404).json({ error: 'Station introuvable' });
-        res.json(rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
 });
 
 app.listen(port, '0.0.0.0', () => {

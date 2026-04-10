@@ -83,7 +83,19 @@
             z-index: 999;
             display: none;
         }
-        @media (max-width: 768px) { .filters { flex-direction: column; } }
+        .station-selector {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .station-selector label { font-weight: bold; }
+        .station-selector select { width: auto; margin: 0; }
+        @media (max-width: 768px) { .filters { flex-direction: column; } .station-selector { flex-direction: column; align-items: stretch; } .station-selector select { width: 100%; } }
     </style>
 </head>
 <body>
@@ -104,6 +116,11 @@
                     <h1 id="stationName">⛽ Suivi station-service</h1>
                 </div>
                 <button class="logout-btn" onclick="logout()">Déconnexion</button>
+            </div>
+            <div id="stationSelectorContainer" class="station-selector" style="display: none;">
+                <label>📡 Changer de station :</label>
+                <select id="stationSelect"></select>
+                <button id="applyStationBtn" onclick="changeStation()">Appliquer</button>
             </div>
             <div id="alertMessage" style="display:none;" class="alert"></div>
             <div id="currentMonthSummary" class="stats"></div>
@@ -202,6 +219,7 @@
         let autoRefreshInterval = null;
         let autoRefresh = false;
         let deferredPrompt = null;
+        let currentUserRole = null;
 
         // ---- Service Worker & PWA ----
         if ('serviceWorker' in navigator) {
@@ -257,6 +275,8 @@
                     body: JSON.stringify({ username, password })
                 });
                 if (res && res.ok) {
+                    const data = await res.json();
+                    currentUserRole = data.role;
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('dashboardContainer').style.display = 'block';
                     initDashboard();
@@ -277,7 +297,53 @@
             autoRefresh = false;
         }
 
-        // ---- Chargement des pompes dans les listes déroulantes ----
+        // ---- Chargement des stations pour super admin ----
+        async function loadStationsForAdmin() {
+            if (currentUserRole !== 'super_admin') return;
+            const res = await apiFetch('/api/stations');
+            if (!res) return;
+            const stations = await res.json();
+            const select = document.getElementById('stationSelect');
+            select.innerHTML = '<option value="">-- Sélectionnez une station --</option>';
+            stations.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s.id;
+                option.textContent = `${s.name} (${s.location || 'localisation inconnue'})`;
+                select.appendChild(option);
+            });
+            document.getElementById('stationSelectorContainer').style.display = 'flex';
+        }
+
+        async function changeStation() {
+            const stationId = document.getElementById('stationSelect').value;
+            const res = await apiFetch('/api/select_station', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ station_id: stationId || null })
+            });
+            if (res && res.ok) {
+                await refreshAllData();
+            }
+        }
+
+        async function refreshAllData() {
+            await loadStationInfo();
+            await loadCurrentMonth();
+            await loadDaily();
+            await loadWeekly();
+            await loadComparison();
+            await loadStats();
+            await loadPumpStats();
+            await loadThresholds();
+            await checkAlerts();
+            await loadPumps('dailyPump');
+            await loadPumps('weeklyPump');
+            await loadPumps('comparePump');
+            await loadPumps('statsPump');
+            await loadPumps('invoicePump');
+        }
+
+        // ---- Chargement des pompes ----
         async function loadPumps(selectElementId) {
             const res = await apiFetch('/api/pumps');
             if (!res) return [];
@@ -295,7 +361,7 @@
             return pumps;
         }
 
-        // ---- Informations de la station (nom + logo) ----
+        // ---- Informations de la station ----
         async function loadStationInfo() {
             const res = await apiFetch('/api/station_info');
             if (!res) return;
@@ -313,6 +379,7 @@
 
         // ---- Initialisation du tableau de bord ----
         async function initDashboard() {
+            await loadStationsForAdmin();
             await loadPumps('dailyPump');
             await loadPumps('weeklyPump');
             await loadPumps('comparePump');
@@ -368,14 +435,7 @@
                 btn.classList.remove('active');
             } else {
                 autoRefreshInterval = setInterval(() => {
-                    loadCurrentMonth();
-                    loadDaily();
-                    loadWeekly();
-                    loadComparison();
-                    loadStats();
-                    loadInvoice();
-                    loadPumpStats();
-                    checkAlerts();
+                    refreshAllData();
                 }, 30000);
                 autoRefresh = true;
                 btn.textContent = '🔄 Auto ON (30s)';
@@ -625,6 +685,7 @@
             if (res && res.ok) {
                 const data = await res.json();
                 if (data.authenticated) {
+                    currentUserRole = data.role;
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('dashboardContainer').style.display = 'block';
                     initDashboard();

@@ -1,49 +1,18 @@
-# Dependencies
+# Dépendances (ne jamais versionner)
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 package-lock.json
 yarn.lock
 
-# Environment variables
+# Variables d'environnement
 .env
 .env.local
 .env.*.local
 
-# Logs
-logs/
+# Fichiers système
+.DS_Store
 *.log
 
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# IDE files
-.vscode/
+# Idées
 .idea/
+.vscode/
 *.swp
-*.swo
-*~
-
-# Build outputs
-dist/
-build/
-
-# Temporary files
-tmp/
-temp/
-
-# MySQL dumps
-*.sql
-*.dump
-
-# Backup files
-*.bak
-*.backup
-node_modules/
