@@ -80,17 +80,47 @@ async function getEffectiveStationId(req) {
 app.post('/api/sensor/:pump_id', async (req, res) => {
     const pump_id = parseInt(req.params.pump_id);
     const { liters, api_key } = req.body;
+    
     if (!liters || liters <= 0) return res.status(400).json({ error: 'Litres invalides' });
     if (process.env.SENSOR_API_KEY && api_key !== process.env.SENSOR_API_KEY) {
         return res.status(403).json({ error: 'Clé API invalide' });
     }
+    
     try {
-        const [pump] = await pool.query('SELECT id FROM pumps WHERE id = ?', [pump_id]);
+        // 1. Vérifier que la pompe existe
+        const [pump] = await pool.query('SELECT id, fuel_type, station_id FROM pumps WHERE id = ?', [pump_id]);
         if (pump.length === 0) return res.status(404).json({ error: 'Pompe inconnue' });
+        
+        // 2. Enregistrer la vente dans fuel_readings
         await pool.query('INSERT INTO fuel_readings (pump_id, liters, timestamp) VALUES (?, ?, NOW())', [pump_id, liters]);
-        res.json({ success: true, pump_id, liters });
+        
+        // 3. Mettre à jour le réservoir correspondant
+        const pumpInfo = pump[0];
+        const [tankExists] = await pool.query('SELECT id, last_known_volume, threshold_alert FROM tanks WHERE station_id = ? AND fuel_type = ?', 
+            [pumpInfo.station_id, pumpInfo.fuel_type]);
+        
+        let alertMessage = null;
+        if (tankExists.length > 0) {
+            const newVolume = tankExists[0].last_known_volume - liters;
+            await pool.query(
+                'UPDATE tanks SET last_known_volume = last_known_volume - ?, last_update = NOW() WHERE station_id = ? AND fuel_type = ?',
+                [liters, pumpInfo.station_id, pumpInfo.fuel_type]
+            );
+            
+            // Vérifier si le seuil d'alerte est atteint
+            if (newVolume <= tankExists[0].threshold_alert) {
+                alertMessage = `⚠️ Alerte: Le réservoir de ${pumpInfo.fuel_type} est à ${newVolume.toFixed(2)} L (seuil: ${tankExists[0].threshold_alert} L)`;
+                console.log(alertMessage);
+            }
+            
+            console.log(`✅ Réservoir mis à jour: station ${pumpInfo.station_id}, ${pumpInfo.fuel_type}, -${liters} L, reste: ${newVolume.toFixed(2)} L`);
+        } else {
+            console.log(`⚠️ Aucun réservoir trouvé pour station ${pumpInfo.station_id}, carburant ${pumpInfo.fuel_type}`);
+        }
+        
+        res.json({ success: true, pump_id, liters, alert: alertMessage });
     } catch (err) {
-        console.error(err);
+        console.error('Erreur capteur:', err);
         res.status(500).json({ error: err.message });
     }
 });

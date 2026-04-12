@@ -385,43 +385,52 @@
             }
         }
 
-        // ---- Réservoirs ----
-        async function loadTanks() {
-            const res = await apiFetch('/api/tanks');
-            if (!res) return;
-            const tanks = await res.json();
-            const container = document.getElementById('tanksContainer');
-            if (!container) return;
-            if (tanks.length === 0) {
-                container.innerHTML = '<div class="card">Aucun réservoir configuré pour cette station.</div>';
-                return;
-            }
-            let html = '';
-            tanks.forEach(tank => {
-                const fuelLabel = tank.fuel_type === 'diesel' ? 'Gazoil' : 'Essence';
-                const volume = parseFloat(tank.last_known_volume).toFixed(2);
-                const initial = parseFloat(tank.initial_volume).toFixed(2);
-                const percentage = (volume / initial * 100).toFixed(1);
-                let alertClass = '';
-                if (volume <= tank.threshold_alert) alertClass = 'style="border-left-color: red;"';
-                html += `
-                    <div class="card" ${alertClass}>
-                        <h3>${fuelLabel}</h3>
-                        <div class="value">${volume} L</div>
-                        <div>Capacité initiale : ${initial} L</div>
-                        <div>Niveau : ${percentage}%</div>
-                        <div>Seuil d'alerte : ${tank.threshold_alert} L</div>
-                        <div>Dernière mise à jour : ${new Date(tank.last_update).toLocaleString()}</div>
-                        <div style="margin-top:10px;">
-                            <label>Nouveau seuil (litres) :</label>
-                            <input type="number" id="threshold_${tank.fuel_type}" value="${tank.threshold_alert}" step="100" style="width:120px;">
-                            <button onclick="updateThreshold('${tank.fuel_type}')">Enregistrer</button>
-                        </div>
+       // ---- Réservoirs avec barre de progression ----
+async function loadTanks() {
+    const res = await apiFetch('/api/tanks');
+    if (!res) return;
+    const tanks = await res.json();
+    const container = document.getElementById('tanksContainer');
+    if (!container) return;
+    if (tanks.length === 0) {
+        container.innerHTML = '<div class="card">Aucun réservoir configuré pour cette station.</div>';
+        return;
+    }
+    let html = '';
+    tanks.forEach(tank => {
+        const fuelLabel = tank.fuel_type === 'diesel' ? 'Gazoil' : 'Essence';
+        const volume = parseFloat(tank.last_known_volume).toFixed(2);
+        const initial = parseFloat(tank.initial_volume).toFixed(2);
+        const percentage = (volume / initial * 100).toFixed(1);
+        const vendu = (initial - volume).toFixed(2);
+        const barColor = volume <= tank.threshold_alert ? '#e74c3c' : '#27ae60';
+        let alertClass = '';
+        if (volume <= tank.threshold_alert) alertClass = 'style="border-left-color: red;"';
+        
+        html += `
+            <div class="card" ${alertClass}>
+                <h3>${fuelLabel}</h3>
+                <div class="value">${volume} L</div>
+                <div style="background: #eee; border-radius: 10px; height: 20px; margin: 10px 0;">
+                    <div style="background: ${barColor}; width: ${percentage}%; height: 20px; border-radius: 10px; text-align: center; color: white; line-height: 20px; font-size: 12px;">
+                        ${percentage}%
                     </div>
-                `;
-            });
-            container.innerHTML = html;
-        }
+                </div>
+                <div>📊 Niveau : ${percentage}% <span style="color: #666;">(reste ${volume} L)</span></div>
+                <div>📉 Vendu : ${vendu} L</div>
+                <div>🏭 Capacité initiale : ${initial} L</div>
+                <div>⚠️ Seuil d'alerte : ${tank.threshold_alert} L</div>
+                <div>🕐 Dernière mise à jour : ${new Date(tank.last_update).toLocaleString()}</div>
+                <div style="margin-top:10px;">
+                    <label>🔔 Nouveau seuil (litres) :</label>
+                    <input type="number" id="threshold_${tank.fuel_type}" value="${tank.threshold_alert}" step="100" style="width:120px;">
+                    <button onclick="updateThreshold('${tank.fuel_type}')">Enregistrer</button>
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
 
         async function updateThreshold(fuel_type) {
             const input = document.getElementById(`threshold_${fuel_type}`);
