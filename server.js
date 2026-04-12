@@ -505,6 +505,42 @@ app.post('/api/tanks/threshold', requireAuth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// --- Mise à jour du volume du réservoir via capteur ultrason ---
+app.post('/api/tanks/update', async (req, res) => {
+    const { station_id, fuel_type, volume } = req.body;
+    
+    if (!station_id || !fuel_type || volume === undefined) {
+        return res.status(400).json({ error: 'Données invalides' });
+    }
+    
+    try {
+        const [result] = await pool.query(
+            'UPDATE tanks SET last_known_volume = ?, last_update = NOW() WHERE station_id = ? AND fuel_type = ?',
+            [volume, station_id, fuel_type]
+        );
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Réservoir non trouvé' });
+        }
+        
+        // Vérifier le seuil d'alerte
+        const [tank] = await pool.query(
+            'SELECT threshold_alert FROM tanks WHERE station_id = ? AND fuel_type = ?',
+            [station_id, fuel_type]
+        );
+        
+        let alertMessage = null;
+        if (tank.length > 0 && volume <= tank[0].threshold_alert) {
+            alertMessage = `⚠️ Alerte: Le réservoir de ${fuel_type} est à ${volume} L (seuil: ${tank[0].threshold_alert} L)`;
+            console.log(alertMessage);
+        }
+        
+        res.json({ success: true, station_id, fuel_type, volume, alert: alertMessage });
+    } catch (err) {
+        console.error('Erreur mise à jour réservoir:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 // --- Health check ---
 app.get('/health', async (req, res) => {
     try {
