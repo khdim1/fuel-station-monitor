@@ -443,7 +443,38 @@ app.post('/api/thresholds', requireAuth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// --- Gestion des réservoirs ---
+app.get('/api/tanks', requireAuth, async (req, res) => {
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.json([]);
+    try {
+        const [rows] = await pool.query(
+            'SELECT id, fuel_type, initial_volume, last_known_volume, last_update, threshold_alert FROM tanks WHERE station_id = ?',
+            [stationId]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
+app.post('/api/tanks/threshold', requireAuth, async (req, res) => {
+    const stationId = await getEffectiveStationId(req);
+    if (!stationId) return res.status(403).json({ error: 'Station non sélectionnée' });
+    const { fuel_type, threshold_alert } = req.body;
+    if (!fuel_type || threshold_alert === undefined) return res.status(400).json({ error: 'Données invalides' });
+    try {
+        await pool.query(
+            'UPDATE tanks SET threshold_alert = ? WHERE station_id = ? AND fuel_type = ?',
+            [threshold_alert, stationId, fuel_type]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
 // --- Health check ---
 app.get('/health', async (req, res) => {
     try {
