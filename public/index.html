@@ -5,13 +5,13 @@
     <meta name="theme-color" content="#e67e22">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Station Fuel - Suivi capteurs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Station Fuel - Suivi carburant</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #2c3e50, #e67e22);
@@ -20,74 +20,113 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
         .dashboard-container {
             max-width: 1400px;
-            margin: 20px auto;
+            width: 100%;
+            margin: 0 auto;
             background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            border-radius: 20px;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.2);
             display: none;
+            overflow: hidden;
         }
+        .dashboard-layout {
+            display: flex;
+            min-height: 600px;
+        }
+        .tabs-vertical {
+            width: 220px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            padding: 20px 0;
+            flex-shrink: 0;
+        }
+        .tab {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px;
+            margin: 4px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #4a5568;
+            font-weight: 500;
+        }
+        .tab i { font-style: normal; font-size: 1.2rem; width: 28px; text-align: center; }
+        .tab:hover { background: #e9ecef; color: #e67e22; }
+        .tab.active { background: #e67e22; color: white; box-shadow: 0 4px 10px rgba(230,126,34,0.3); }
+        .content-area {
+            flex: 1;
+            padding: 24px 28px;
+            background: white;
+            overflow-x: auto;
+        }
+        .tab-content { display: none; animation: fadeIn 0.25s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .login-card {
             background: white;
             padding: 40px;
-            border-radius: 16px;
+            border-radius: 28px;
             box-shadow: 0 20px 35px rgba(0,0,0,0.2);
-            width: 350px;
+            width: 380px;
             text-align: center;
         }
         h1, h2, h3 { color: #2c3e50; }
         input, select, button {
             width: 100%;
-            padding: 12px;
+            padding: 12px 16px;
             margin: 8px 0;
-            border-radius: 8px;
+            border-radius: 12px;
             border: 1px solid #ddd;
             font-size: 16px;
+            transition: 0.2s;
         }
         button {
             background: #e67e22;
             color: white;
             border: none;
             cursor: pointer;
-            transition: 0.2s;
+            font-weight: 600;
         }
-        button:hover { background: #d35400; }
-        .error { color: #e74c3c; margin-top: 10px; }
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; border-bottom: 1px solid #ddd; }
-        .tab { padding: 10px 20px; cursor: pointer; background: #f8f9fa; border-radius: 5px 5px 0 0; }
-        .tab.active { background: #e67e22; color: white; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .filters { display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin: 20px 0; }
+        button:hover { background: #d35400; transform: translateY(-1px); }
+        .error { color: #e74c3c; margin-top: 10px; font-size: 14px; }
+        .filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin: 20px 0;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 16px;
+        }
         .stats, .pump-stats { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
-        .card { background: #f9f9f9; border-radius: 8px; padding: 20px; flex: 1; min-width: 200px; border-left: 4px solid #e67e22; }
-        .card .value { font-size: 28px; font-weight: bold; color: #2c3e50; }
-        canvas { max-width: 100%; margin-top: 20px; background: white; border-radius: 8px; padding: 10px; }
-        .logout-btn { float: right; background: #e74c3c; margin-bottom: 10px; width: auto; padding: 8px 16px; }
-        .auto-refresh { background: #f1c40f; margin-left: 20px; width: auto; }
-        .auto-refresh.active { background: #27ae60; }
-        .alert { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin-bottom: 15px; }
-        .install-btn {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #e67e22;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            z-index: 999;
-            display: none;
+        .card {
+            background: #f9f9f9;
+            border-radius: 16px;
+            padding: 20px;
+            flex: 1;
+            min-width: 200px;
+            border-left: 4px solid #e67e22;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
+        .card .value { font-size: 28px; font-weight: bold; color: #2c3e50; }
+        canvas { max-width: 100%; margin-top: 20px; background: white; border-radius: 12px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .logout-btn { background: #e74c3c; width: auto; padding: 8px 20px; float: right; margin-bottom: 10px; }
+        .auto-refresh { background: #f1c40f; margin-left: 15px; width: auto; color: #2c3e50; }
+        .auto-refresh.active { background: #27ae60; color: white; }
+        .alert { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #e74c3c; }
+        .install-btn { position: fixed; bottom: 20px; right: 20px; background: #e67e22; color: white; border: none; padding: 10px 20px; border-radius: 50px; cursor: pointer; z-index: 999; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: none; }
+        footer { margin-top: 30px; border-top: 1px solid #eee; padding-top: 15px; font-size: 12px; color: #777; text-align: center; }
         .station-selector {
             background: #f0f0f0;
-            padding: 10px;
-            border-radius: 8px;
-            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
             gap: 15px;
@@ -95,7 +134,113 @@
         }
         .station-selector label { font-weight: bold; }
         .station-selector select { width: auto; margin: 0; }
-        @media (max-width: 768px) { .filters { flex-direction: column; } .station-selector { flex-direction: column; align-items: stretch; } .station-selector select { width: 100%; } }
+        
+        /* Tableau de bord IoT - fond blanc */
+        .iot-bg { 
+            background-color: white; 
+            color: #2c3e50; 
+            padding: 20px; 
+            border-radius: 20px; 
+        }
+        .iot-card { 
+            background-color: #f8f9fa; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 20px; 
+            padding: 20px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .iot-card p, .iot-card h3, .iot-card h2 { color: #2c3e50; }
+        .iot-card h2 { color: #e67e22; }
+        .gauge-container { 
+            height: 150px; 
+            width: 80px; 
+            background: #e2e8f0; 
+            border-radius: 20px; 
+            position: relative; 
+            overflow: hidden; 
+            margin: 0 auto; 
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+        }
+        .gauge-fill { position: absolute; bottom: 0; width: 100%; transition: height 0.6s cubic-bezier(0.2, 0.9, 0.4, 1.1); }
+        .alert-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .grid { display: grid; gap: 20px; }
+        .grid-cols-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(0,0,0,0.1); border-radius: 50%; border-top-color: #e67e22; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { display: flex; align-items: center; gap: 8px; color: #666; font-size: 14px; margin: 10px 0; }
+        
+        /* Style du tableau des détails journaliers */
+        .daily-details-table {
+            margin-top: 30px;
+            overflow-x: auto;
+        }
+        .daily-details-table table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .daily-details-table th, .daily-details-table td {
+            padding: 12px 15px;
+            text-align: center;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .daily-details-table th {
+            background: #e67e22;
+            color: white;
+            font-weight: 600;
+        }
+        .daily-details-table tr:hover {
+            background: #fef9f5;
+        }
+
+        /* Style du résumé des ventes */
+        .daily-summary {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .summary-card {
+            background: #f0fdf4;
+            border-radius: 16px;
+            padding: 15px 20px;
+            flex: 1;
+            min-width: 200px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-left: 4px solid #27ae60;
+        }
+        .summary-card h4 {
+            font-size: 14px;
+            color: #4a5568;
+            margin-bottom: 8px;
+        }
+        .summary-card .liters {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .summary-card .amount {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e67e22;
+        }
+        .summary-card.total {
+            background: #fef9f5;
+            border-left-color: #e67e22;
+        }
+        @media (max-width: 768px) {
+            .dashboard-layout { flex-direction: column; }
+            .tabs-vertical { width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 12px; border-right: none; border-bottom: 1px solid #e9ecef; }
+            .tab { padding: 8px 16px; margin: 0; }
+            .content-area { padding: 16px; }
+            .filters { flex-direction: column; align-items: stretch; }
+            .station-selector { flex-direction: column; align-items: stretch; }
+            .daily-summary { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
@@ -103,668 +248,889 @@
         <h1>⛽ Station Fuel</h1>
         <input type="text" id="username" placeholder="Nom d'utilisateur">
         <input type="password" id="password" placeholder="Mot de passe">
-        <button onclick="login()">Se connecter</button>
+        <button id="loginBtn">Se connecter</button>
         <div id="errorMsg" class="error"></div>
         <div class="footer">Gestion carburant - Capteurs automatiques</div>
     </div>
 
     <div id="dashboardContainer" class="dashboard-container">
-        <div id="reportContent">
-            <div style="overflow: auto; display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <img id="stationLogo" src="/icons/default-logo.png" alt="Logo" style="height: 50px;">
-                    <h1 id="stationName">⛽ Suivi station-service</h1>
-                </div>
-                <button class="logout-btn" onclick="logout()">Déconnexion</button>
+        <div style="padding: 20px 24px 0 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <img id="stationLogo" src="/icons/default-logo.png" alt="Logo" style="height: 50px;">
+                <h1 id="stationName" style="margin:0;">⛽ Suivi station-service</h1>
             </div>
-            <div id="stationSelectorContainer" class="station-selector" style="display: none;">
-                <label>📡 Changer de station :</label>
-                <select id="stationSelect"></select>
-                <button id="applyStationBtn" onclick="changeStation()">Appliquer</button>
-            </div>
-            <div id="alertMessage" style="display:none;" class="alert"></div>
-            <div id="currentMonthSummary" class="stats"></div>
+            <button id="logoutBtn" class="logout-btn">Déconnexion</button>
+        </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                <div class="tabs">
-                    <div class="tab active" data-tab="daily">📅 Journalier</div>
-                    <div class="tab" data-tab="weekly">📆 Hebdomadaire</div>
-                    <div class="tab" data-tab="comparison">📊 Comparaison mensuelle</div>
-                    <div class="tab" data-tab="stats">📈 Stats & Seuils</div>
-                    <div class="tab" data-tab="invoice">🧾 Facture</div>
-                    <div class="tab" data-tab="pumps">⛽ Détail par pompe</div>
-                    <div class="tab" data-tab="tanks">⛽ Réservoirs</div>
-                </div>
-                <button id="autoRefreshBtn" class="auto-refresh" onclick="toggleAutoRefresh()">🔄 Auto OFF</button>
+        <div class="dashboard-layout">
+            <div class="tabs-vertical" id="tabContainer">
+                <div class="tab active" data-tab="iot-view"><i>📊</i> Tableau de bord</div>
+                <div class="tab" data-tab="daily"><i>📅</i> Journalier</div>
+                <div class="tab" data-tab="weekly"><i>📆</i> Hebdomadaire</div>
+                <div class="tab" data-tab="comparison"><i>📊</i> Comparaison mensuelle</div>
+                <div class="tab" data-tab="pumps"><i>⛽</i> Pompes</div>
+                <div class="tab" data-tab="tanks"><i>🛢️</i> Réservoirs</div>
+                <div class="tab" data-tab="invoice"><i>🧾</i> Facture</div>
+                <div class="tab" data-tab="stats"><i>📈</i> Stats & Seuils</div>
             </div>
-
-            <!-- Onglet Journalier -->
-            <div id="daily" class="tab-content active">
-                <div class="filters">
-                    <div><label>Du :</label><input type="date" id="dailyStart"></div>
-                    <div><label>Au :</label><input type="date" id="dailyEnd"></div>
-                    <div><label>Pompe :</label><select id="dailyPump"><option value="">Toutes</option></select></div>
-                    <button onclick="loadDaily()">Actualiser</button>
-                    <button class="export" onclick="exportPDF()">📄 Exporter rapport</button>
+            <div class="content-area">
+                <div id="stationSelectorContainer" class="station-selector" style="display: none;">
+                    <label>📡 Changer de station :</label>
+                    <select id="stationSelect"></select>
+                    <button id="applyStationBtn">Appliquer</button>
                 </div>
-                <canvas id="dailyChart" width="800" height="400"></canvas>
-            </div>
+                <div id="alertMessage" style="display:none;" class="alert"></div>
+                <div id="loadingIndicator" class="loading-text" style="display: none;"><div class="spinner"></div> Chargement...</div>
 
-            <!-- Hebdomadaire -->
-            <div id="weekly" class="tab-content">
-                <div class="filters">
-                    <div><label>Année :</label><input type="number" id="weekYear" value="2026"></div>
-                    <div><label>Pompe :</label><select id="weeklyPump"><option value="">Toutes</option></select></div>
-                    <button onclick="loadWeekly()">Afficher</button>
+                <!-- Tableau de bord IoT (fond blanc, cuve gazoil orange) -->
+                <div id="iot-view" class="tab-content active iot-bg">
+                    <div class="grid grid-cols-2" style="margin-bottom: 20px;">
+                        <div class="iot-card"><p style="color: #4a5568; font-size: 12px;">Volume Total du Jour</p><h2 id="iot-total-liters" style="color: #e67e22; font-size: 32px;">0 L</h2></div>
+                        <div class="iot-card"><p style="color: #4a5568; font-size: 12px;">Chiffre d'Affaires</p><h2 id="iot-total-fcfa" style="color: #27ae60; font-size: 32px;">0 FCFA</h2></div>
+                    </div>
+                    <div class="grid grid-cols-2" style="gap: 20px;">
+                        <div class="iot-card" style="text-align: center;">
+                            <h3 style="color: #2c3e50; margin-bottom: 15px;">CUVE GAZOIL</h3>
+                            <div class="gauge-container" style="border: 2px solid #e67e22;">
+                                <div id="gauge-diesel" class="gauge-fill" style="background: #e67e22; height: 0%;"></div>
+                            </div>
+                            <p id="label-diesel" style="font-size: 24px; font-weight: bold; margin-top: 10px; color: #e67e22;">0%</p>
+                            <p id="vol-diesel" style="color: #4a5568; font-size: 14px;">0 L / 0 L</p>
+                        </div>
+                        <div class="iot-card" style="text-align: center;">
+                            <h3 style="color: #2c3e50; margin-bottom: 15px;">CUVE ESSENCE</h3>
+                            <div class="gauge-container" style="border: 2px solid #3498db;">
+                                <div id="gauge-gasoline" class="gauge-fill" style="background: #3498db; height: 0%;"></div>
+                            </div>
+                            <p id="label-gasoline" style="font-size: 24px; font-weight: bold; margin-top: 10px; color: #3498db;">0%</p>
+                            <p id="vol-gasoline" style="color: #4a5568; font-size: 14px;">0 L / 0 L</p>
+                        </div>
+                        <div class="iot-card"><h3 style="color: #2c3e50; margin-bottom: 10px;">FLUX DES VENTES (7 derniers jours)</h3><canvas id="iotLiveChart" style="background: transparent; height: 220px; width: 100%;"></canvas></div>
+                    </div>
                 </div>
-                <canvas id="weeklyChart" width="800" height="400"></canvas>
-            </div>
 
-            <!-- Comparaison mensuelle -->
-            <div id="comparison" class="tab-content">
-                <div class="filters">
-                    <div><label>Mois :</label><input type="month" id="compareMonth"></div>
-                    <div><label>Pompe :</label><select id="comparePump"><option value="">Toutes</option></select></div>
-                    <button onclick="loadComparison()">Comparer</button>
+                <!-- Journalier (avec résumé, graphique et tableau) -->
+                <div id="daily" class="tab-content">
+                    <div class="filters">
+                        <div><label>Du :</label><input type="date" id="dailyStart"></div>
+                        <div><label>Au :</label><input type="date" id="dailyEnd"></div>
+                        <div><label>Pompe :</label><select id="dailyPump"><option value="">Toutes</option></select></div>
+                        <button class="action-btn" data-action="daily">Actualiser</button>
+                        <button class="export" data-export="pdf">📄 Exporter rapport</button>
+                    </div>
+                    
+                    <!-- Résumé des ventes sur la période -->
+                    <div id="dailySummaryContainer" class="daily-summary"></div>
+
+                    <canvas id="dailyChart" width="800" height="400"></canvas>
+                    <div class="daily-details-table">
+                        <table id="dailyDetailsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Gazoil (L)</th>
+                                    <th>Essence (L)</th>
+                                    <th>Total (L)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyDetailsBody">
+                                <tr><td colspan="4">Aucune donnée</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div id="comparisonResult" class="stats"></div>
-            </div>
 
-            <!-- Stats & Seuils -->
-            <div id="stats" class="tab-content">
-                <div class="filters">
-                    <div><label>Du :</label><input type="date" id="statsStart"></div>
-                    <div><label>Au :</label><input type="date" id="statsEnd"></div>
-                    <div><label>Pompe :</label><select id="statsPump"><option value="">Toutes</option></select></div>
-                    <button onclick="loadStats()">Calculer</button>
+                <!-- Hebdomadaire -->
+                <div id="weekly" class="tab-content">
+                    <div class="filters">
+                        <div><label>Année :</label><input type="number" id="weekYear" value="2026"></div>
+                        <div><label>Pompe :</label><select id="weeklyPump"><option value="">Toutes</option></select></div>
+                        <button class="action-btn" data-action="weekly">Afficher</button>
+                    </div>
+                    <canvas id="weeklyChart" width="800" height="400"></canvas>
                 </div>
-                <div id="statsResult" class="stats"></div>
-                <h3>⚙️ Seuils d'alerte (litres / mois)</h3>
-                <div class="filters">
-                    <div>Gazoil : <input type="number" id="dieselThreshold" step="100"></div>
-                    <div>Essence : <input type="number" id="gasolineThreshold" step="100"></div>
-                    <button onclick="saveThresholds()">Enregistrer</button>
+
+                <!-- Comparaison mensuelle -->
+                <div id="comparison" class="tab-content">
+                    <div class="filters">
+                        <div><label>Mois :</label><input type="month" id="compareMonth"></div>
+                        <div><label>Pompe :</label><select id="comparePump"><option value="">Toutes</option></select></div>
+                        <button class="action-btn" data-action="comparison">Comparer</button>
+                    </div>
+                    <div id="comparisonResult" class="stats"></div>
                 </div>
-                <p id="thresholdStatus"></p>
-            </div>
 
-            <!-- Facture -->
-            <div id="invoice" class="tab-content">
-                <div class="filters">
-                    <div><label>Mois :</label><input type="month" id="invoiceMonth"></div>
-                    <div><label>Pompe :</label><select id="invoicePump"><option value="">Toutes</option></select></div>
-                    <button onclick="loadInvoice()">Calculer facture</button>
-                    <button class="export" onclick="exportInvoicePDF()">📄 Exporter PDF</button>
+                <!-- Pompes -->
+                <div id="pumps" class="tab-content">
+                    <div class="filters">
+                        <div><label>Du :</label><input type="date" id="pumpStart"></div>
+                        <div><label>Au :</label><input type="date" id="pumpEnd"></div>
+                        <button class="action-btn" data-action="pumpStats">Afficher statistiques par pompe</button>
+                    </div>
+                    <div id="pumpStatsResult" class="pump-stats"></div>
                 </div>
-                <div id="invoiceResult" class="invoice" style="background:#fff;padding:20px;border-radius:8px;"></div>
-            </div>
 
-            <!-- Détail par pompe -->
-            <div id="pumps" class="tab-content">
-                <div class="filters">
-                    <div><label>Du :</label><input type="date" id="pumpStart"></div>
-                    <div><label>Au :</label><input type="date" id="pumpEnd"></div>
-                    <button onclick="loadPumpStats()">Afficher statistiques par pompe</button>
+                <!-- Réservoirs -->
+                <div id="tanks" class="tab-content">
+                    <h3>📊 État des réservoirs</h3>
+                    <div id="tanksContainer" class="stats"></div>
                 </div>
-                <div id="pumpStatsResult" class="pump-stats"></div>
-            </div>
 
-            <!-- Réservoirs -->
-            <div id="tanks" class="tab-content">
-                <h3>📊 État des réservoirs</h3>
-                <div id="tanksContainer" class="stats"></div>
-            </div>
+                <!-- Facture -->
+                <div id="invoice" class="tab-content">
+                    <div class="filters">
+                        <div><label>Mois :</label><input type="month" id="invoiceMonth"></div>
+                        <div><label>Pompe :</label><select id="invoicePump"><option value="">Toutes</option></select></div>
+                        <button class="action-btn" data-action="invoice">Calculer facture</button>
+                        <button class="export" data-export="invoicePDF">📄 Exporter PDF</button>
+                    </div>
+                    <div id="invoiceResult" class="invoice" style="background:#fff;padding:20px;border-radius:16px;"></div>
+                </div>
 
-            <footer>Données automatiques des capteurs - Mise à jour toutes les 30s</footer>
+                <!-- Stats & Seuils -->
+                <div id="stats" class="tab-content">
+                    <div class="filters">
+                        <div><label>Du :</label><input type="date" id="statsStart"></div>
+                        <div><label>Au :</label><input type="date" id="statsEnd"></div>
+                        <div><label>Pompe :</label><select id="statsPump"><option value="">Toutes</option></select></div>
+                        <button class="action-btn" data-action="stats">Calculer</button>
+                    </div>
+                    <div id="statsResult" class="stats"></div>
+                    <h3 style="margin-top: 30px;">⚙️ Seuils d'alerte (litres / mois)</h3>
+                    <div class="filters">
+                        <div>Gazoil : <input type="number" id="dieselThreshold" step="100"></div>
+                        <div>Essence : <input type="number" id="gasolineThreshold" step="100"></div>
+                        <button id="saveThresholdsBtn">Enregistrer</button>
+                    </div>
+                    <p id="thresholdStatus"></p>
+                </div>
+                <footer>Station Fuel - Données automatiques des capteurs - Mise à jour temps réel</footer>
+            </div>
         </div>
     </div>
 
     <button id="installBtn" class="install-btn">📲 Installer l'application</button>
 
     <script>
-        let dailyChart, weeklyChart;
-        let autoRefreshInterval = null;
-        let autoRefresh = false;
-        let deferredPrompt = null;
-        let currentUserRole = null;
+        (function(){
+            // ---------- VARIABLES GLOBALES ----------
+            let dailyChart = null, weeklyChart = null, iotLiveChart = null;
+            let autoRefreshInterval = null;
+            let autoRefresh = false;
+            let currentUserRole = null;
+            let loadingTimeout = null;
 
-        // ---- Service Worker & PWA ----
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('Service Worker enregistré', reg))
-                    .catch(err => console.error('Erreur SW', err));
-            });
-        }
+            const loadingDiv = document.getElementById('loadingIndicator');
 
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            document.getElementById('installBtn').style.display = 'block';
-        });
-
-        document.getElementById('installBtn').addEventListener('click', () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then(() => {
-                    deferredPrompt = null;
-                    document.getElementById('installBtn').style.display = 'none';
-                });
+            function showLoading(show){
+                if(loadingDiv) loadingDiv.style.display = show ? 'flex' : 'none';
+                if(show){
+                    if(loadingTimeout) clearTimeout(loadingTimeout);
+                    loadingTimeout = setTimeout(() => {
+                        if(loadingDiv && loadingDiv.style.display === 'flex') showLoading(false);
+                    }, 8000);
+                }
             }
-        });
 
-        // ---- API fetch avec gestion 401 ----
-        async function apiFetch(url, options = {}) {
-            options.credentials = 'include';
-            const res = await fetch(url, options);
-            if (res.status === 401) {
+            async function apiFetch(url, options = {}){
+                options.credentials = 'include';
+                try{
+                    const res = await fetch(url, options);
+                    if(res.status === 401){
+                        document.getElementById('dashboardContainer').style.display = 'none';
+                        document.getElementById('loginContainer').style.display = 'flex';
+                        if(autoRefreshInterval) clearInterval(autoRefreshInterval);
+                        autoRefresh = false;
+                        return null;
+                    }
+                    return res;
+                } catch(e){
+                    console.error('API fetch error', e);
+                    return null;
+                }
+            }
+
+            // ---------- AUTHENTIFICATION ----------
+            async function login(){
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
+                if(!username || !password){
+                    document.getElementById('errorMsg').innerText = 'Veuillez remplir tous les champs';
+                    return;
+                }
+                showLoading(true);
+                try {
+                    const res = await apiFetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+                    showLoading(false);
+                    if(res && res.ok){
+                        const data = await res.json();
+                        currentUserRole = data.role;
+                        document.getElementById('loginContainer').style.display = 'none';
+                        document.getElementById('dashboardContainer').style.display = 'block';
+                        initDashboard();
+                    } else if(res){
+                        const data = await res.json();
+                        document.getElementById('errorMsg').innerText = data.error || 'Identifiants incorrects';
+                    } else {
+                        document.getElementById('errorMsg').innerText = 'Erreur de connexion au serveur';
+                    }
+                } catch(e){
+                    showLoading(false);
+                    document.getElementById('errorMsg').innerText = 'Erreur lors de la connexion';
+                }
+            }
+
+            async function logout(){
+                await apiFetch('/api/logout', { method: 'POST' });
                 document.getElementById('dashboardContainer').style.display = 'none';
                 document.getElementById('loginContainer').style.display = 'flex';
-                if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+                if(autoRefreshInterval) clearInterval(autoRefreshInterval);
                 autoRefresh = false;
-                return null;
             }
-            return res;
-        }
 
-        // ---- Authentification ----
-        async function login() {
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
-            if (!username || !password) {
-                document.getElementById('errorMsg').innerText = 'Veuillez remplir tous les champs';
-                return;
+            // ---------- STATIONS (SUPERADMIN) ----------
+            async function loadStationsForAdmin(){
+                if(currentUserRole !== 'super_admin') return;
+                const res = await apiFetch('/api/stations');
+                if(!res) return;
+                const stations = await res.json();
+                const select = document.getElementById('stationSelect');
+                if(select){
+                    select.innerHTML = '<option value="">-- Sélectionnez une station --</option>';
+                    stations.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.id;
+                        opt.textContent = `${s.name} (${s.location || 'localisation inconnue'})`;
+                        select.appendChild(opt);
+                    });
+                    document.getElementById('stationSelectorContainer').style.display = 'flex';
+                }
             }
-            try {
-                const res = await apiFetch('/api/login', {
+
+            async function changeStation(){
+                const stationId = document.getElementById('stationSelect').value;
+                const res = await apiFetch('/api/select_station', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ station_id: stationId || null })
                 });
-                if (res && res.ok) {
-                    const data = await res.json();
-                    currentUserRole = data.role;
-                    document.getElementById('loginContainer').style.display = 'none';
-                    document.getElementById('dashboardContainer').style.display = 'block';
-                    initDashboard();
-                } else if (res) {
-                    const data = await res.json();
-                    document.getElementById('errorMsg').innerText = data.error || 'Identifiants incorrects';
+                if(res && res.ok) await refreshAllData();
+            }
+
+            // ---------- CHARGEMENT DES POMPES ----------
+            async function loadPumps(selectElementId){
+                const res = await apiFetch('/api/pumps');
+                if(!res) return [];
+                const pumps = await res.json();
+                const select = document.getElementById(selectElementId);
+                if(select){
+                    select.innerHTML = '<option value="">Toutes les pompes</option>';
+                    pumps.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = `Pompe ${p.pump_number} (${p.fuel_type === 'diesel' ? 'Gazoil' : 'Essence'})`;
+                        select.appendChild(opt);
+                    });
                 }
-            } catch (err) {
-                document.getElementById('errorMsg').innerText = 'Erreur de connexion';
+                return pumps;
             }
-        }
 
-        async function logout() {
-            await apiFetch('/api/logout', { method: 'POST' });
-            document.getElementById('dashboardContainer').style.display = 'none';
-            document.getElementById('loginContainer').style.display = 'flex';
-            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-            autoRefresh = false;
-        }
-
-        // ---- Chargement des stations pour super admin ----
-        async function loadStationsForAdmin() {
-            if (currentUserRole !== 'super_admin') return;
-            const res = await apiFetch('/api/stations');
-            if (!res) return;
-            const stations = await res.json();
-            const select = document.getElementById('stationSelect');
-            select.innerHTML = '<option value="">-- Sélectionnez une station --</option>';
-            stations.forEach(s => {
-                const option = document.createElement('option');
-                option.value = s.id;
-                option.textContent = `${s.name} (${s.location || 'localisation inconnue'})`;
-                select.appendChild(option);
-            });
-            document.getElementById('stationSelectorContainer').style.display = 'flex';
-        }
-
-        async function changeStation() {
-            const stationId = document.getElementById('stationSelect').value;
-            const res = await apiFetch('/api/select_station', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ station_id: stationId || null })
-            });
-            if (res && res.ok) {
-                await refreshAllData();
+            // ---------- INFOS STATION ----------
+            async function loadStationInfo(){
+                const res = await apiFetch('/api/station_info');
+                if(!res) return;
+                const data = await res.json();
+                const nameElem = document.getElementById('stationName');
+                if(nameElem) nameElem.innerHTML = `⛽ ${data.name || 'Station'}`;
+                const logoImg = document.getElementById('stationLogo');
+                if(logoImg && data.logo_url){
+                    logoImg.src = data.logo_url;
+                    logoImg.style.display = 'inline-block';
+                } else if(logoImg) logoImg.style.display = 'none';
             }
-        }
 
-        async function refreshAllData() {
-            await loadStationInfo();
-            await loadCurrentMonth();
-            await loadDaily();
-            await loadWeekly();
-            await loadComparison();
-            await loadStats();
-            await loadPumpStats();
-            await loadThresholds();
-            await loadTanks();
-            await checkAlerts();
-            await loadPumps('dailyPump');
-            await loadPumps('weeklyPump');
-            await loadPumps('comparePump');
-            await loadPumps('statsPump');
-            await loadPumps('invoicePump');
-        }
+            // ---------- TABLEAU DE BORD IoT (JAUGES) ----------
+            async function loadIoTDashboard() {
+                const tanksRes = await apiFetch('/api/tanks');
+                if (!tanksRes) return;
+                const tanks = await tanksRes.json();
+                for (const tank of tanks) {
+                    const fuel = tank.fuel_type;
+                    const volume = tank.last_known_volume;
+                    const initial = tank.initial_volume;
+                    const percentage = (initial > 0) ? (volume / initial * 100).toFixed(1) : 0;
+                    const gauge = document.getElementById(`gauge-${fuel}`);
+                    if (gauge) {
+                        gauge.style.height = percentage + "%";
+                        if (volume <= tank.threshold_alert) {
+                            gauge.classList.add('alert-pulse');
+                            gauge.style.background = "#e74c3c";
+                        } else {
+                            gauge.classList.remove('alert-pulse');
+                            // Couleur orange pour le gazoil, bleue pour l'essence
+                            gauge.style.background = fuel === 'diesel' ? '#e67e22' : '#3498db';
+                        }
+                    }
+                    const label = document.getElementById(`label-${fuel}`);
+                    if (label) {
+                        label.innerText = percentage + "%";
+                        label.style.color = fuel === 'diesel' ? '#e67e22' : '#3498db';
+                    }
+                    const volSpan = document.getElementById(`vol-${fuel}`);
+                    if (volSpan) volSpan.innerText = `${Math.round(volume)} L / ${Math.round(initial)} L`;
+                }
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth()+1).padStart(2,'0');
+                const monthlyRes = await apiFetch(`/api/stats/monthly?year=${year}&month=${month}`);
+                if (monthlyRes) {
+                    const monthly = await monthlyRes.json();
+                    document.getElementById('iot-total-liters').innerText = (monthly.diesel_liters + monthly.gasoline_liters).toFixed(2) + " L";
+                    document.getElementById('iot-total-fcfa').innerText = monthly.total_fcfa.toLocaleString() + " FCFA";
+                }
+                await updateIoTChart();
+            }
 
-        // ---- Chargement des pompes ----
-        async function loadPumps(selectElementId) {
-            const res = await apiFetch('/api/pumps');
-            if (!res) return [];
-            const pumps = await res.json();
-            const select = document.getElementById(selectElementId);
-            if (select) {
-                select.innerHTML = '<option value="">Toutes les pompes</option>';
-                pumps.forEach(p => {
-                    const option = document.createElement('option');
-                    option.value = p.id;
-                    option.textContent = `Pompe ${p.pump_number} (${p.fuel_type === 'diesel' ? 'Gazoil' : 'Essence'})`;
-                    select.appendChild(option);
+            async function updateIoTChart(){
+                const end = new Date();
+                const start = new Date(); start.setDate(end.getDate() - 6);
+                const startStr = start.toISOString().split('T')[0];
+                const endStr = end.toISOString().split('T')[0];
+                const res = await apiFetch(`/api/stats/daily?start=${startStr}&end=${endStr}`);
+                if(!res) return;
+                const data = await res.json();
+                const ctx = document.getElementById('iotLiveChart').getContext('2d');
+                if(iotLiveChart) iotLiveChart.destroy();
+                iotLiveChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.dates,
+                        datasets: [
+                            { label: 'Gazoil (L)', data: data.diesel, borderColor: '#e67e22', backgroundColor: 'rgba(230,126,34,0.1)', fill: true, tension: 0.2 },
+                            { label: 'Essence (L)', data: data.gasoline, borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', fill: true, tension: 0.2 }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#2c3e50' } } }, scales: { y: { ticks: { color: '#2c3e50' } }, x: { ticks: { color: '#2c3e50' } } } }
                 });
             }
-            return pumps;
-        }
 
-        // ---- Informations de la station ----
-        async function loadStationInfo() {
-            const res = await apiFetch('/api/station_info');
-            if (!res) return;
-            const data = await res.json();
-            const nameElem = document.getElementById('stationName');
-            if (nameElem) nameElem.innerHTML = `⛽ ${data.name || 'Station'}`;
-            const logoImg = document.getElementById('stationLogo');
-            if (logoImg && data.logo_url) {
-                logoImg.src = data.logo_url;
-                logoImg.style.display = 'inline-block';
-            } else if (logoImg) {
-                logoImg.style.display = 'none';
+            // ---------- RÉSUMÉ MOIS EN COURS ----------
+            async function loadCurrentMonth(){
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth()+1).padStart(2,'0');
+                const res = await apiFetch(`/api/stats/monthly?year=${year}&month=${month}`);
+                if(!res) return;
+                const data = await res.json();
+                const container = document.getElementById('currentMonthSummary');
+                if(container){
+                    container.innerHTML = `
+                        <div class="card"><h3>📆 Mois en cours</h3>
+                        <div>⛽ Gazoil : ${data.diesel_liters.toFixed(2)} L</div>
+                        <div>⛽ Essence : ${data.gasoline_liters.toFixed(2)} L</div>
+                        <div><strong>💰 Total : ${data.total_fcfa.toLocaleString()} FCFA</strong></div></div>
+                        <div class="card"><h3>💸 Détail coût</h3>
+                        <div>Gazoil : ${data.cost_diesel.toLocaleString()} FCFA</div>
+                        <div>Essence : ${data.cost_gasoline.toLocaleString()} FCFA</div></div>
+                    `;
+                }
             }
-        }
 
-       // ---- Réservoirs avec barre de progression ----
-async function loadTanks() {
-    const res = await apiFetch('/api/tanks');
-    if (!res) return;
-    const tanks = await res.json();
-    const container = document.getElementById('tanksContainer');
-    if (!container) return;
-    if (tanks.length === 0) {
-        container.innerHTML = '<div class="card">Aucun réservoir configuré pour cette station.</div>';
-        return;
-    }
-    let html = '';
-    tanks.forEach(tank => {
-        const fuelLabel = tank.fuel_type === 'diesel' ? 'Gazoil' : 'Essence';
-        const volume = parseFloat(tank.last_known_volume).toFixed(2);
-        const initial = parseFloat(tank.initial_volume).toFixed(2);
-        const percentage = (volume / initial * 100).toFixed(1);
-        const vendu = (initial - volume).toFixed(2);
-        const barColor = volume <= tank.threshold_alert ? '#e74c3c' : '#27ae60';
-        let alertClass = '';
-        if (volume <= tank.threshold_alert) alertClass = 'style="border-left-color: red;"';
-        
-        html += `
-            <div class="card" ${alertClass}>
-                <h3>${fuelLabel}</h3>
-                <div class="value">${volume} L</div>
-                <div style="background: #eee; border-radius: 10px; height: 20px; margin: 10px 0;">
-                    <div style="background: ${barColor}; width: ${percentage}%; height: 20px; border-radius: 10px; text-align: center; color: white; line-height: 20px; font-size: 12px;">
-                        ${percentage}%
+            // ---------- GRAPHIQUE JOURNALIER + RÉSUMÉ + TABLEAU ----------
+            async function loadDaily(){
+                const start = document.getElementById('dailyStart').value;
+                const end = document.getElementById('dailyEnd').value;
+                const pumpId = document.getElementById('dailyPump').value;
+                if(!start || !end) return;
+                let url = `/api/stats/daily?start=${start}&end=${end}`;
+                if(pumpId) url += `&pump_id=${pumpId}`;
+                const res = await apiFetch(url);
+                if(!res) return;
+                const data = await res.json();
+                
+                // Mettre à jour le graphique
+                const ctx = document.getElementById('dailyChart').getContext('2d');
+                if(dailyChart) dailyChart.destroy();
+                if(!data.dates || data.dates.length === 0){
+                    dailyChart = new Chart(ctx, { type: 'line', data: { labels: [], datasets: [] }, options: { responsive: true } });
+                    document.getElementById('dailyDetailsBody').innerHTML = '<td><td colspan="4">Aucune donnée sur cette période</td></tr>';
+                    document.getElementById('dailySummaryContainer').innerHTML = '';
+                    return;
+                }
+                dailyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.dates,
+                        datasets: [
+                            { label: 'Gazoil (litres)', data: data.diesel, borderColor: '#e67e22', backgroundColor: 'rgba(230,126,34,0.1)', fill: true, tension: 0.2 },
+                            { label: 'Essence (litres)', data: data.gasoline, borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', fill: true, tension: 0.2 }
+                        ]
+                    },
+                    options: { responsive: true, scales: { y: { beginAtZero: true, title: { display: true, text: 'Litres' } } } }
+                });
+                
+                // Tableau des détails
+                const tbody = document.getElementById('dailyDetailsBody');
+                let totalDiesel = 0, totalGasoline = 0;
+                let htmlRows = '';
+                for(let i = 0; i < data.dates.length; i++){
+                    const diesel = data.diesel[i];
+                    const gasoline = data.gasoline[i];
+                    totalDiesel += diesel;
+                    totalGasoline += gasoline;
+                    const total = (diesel + gasoline).toFixed(2);
+                    htmlRows += `<tr>
+                                     <td>${data.dates[i]}</td>
+                                     <td>${diesel.toFixed(2)}</td>
+                                     <td>${gasoline.toFixed(2)}</td>
+                                     <td><strong>${total}</strong></td>
+                                 </tr>`;
+                }
+                tbody.innerHTML = htmlRows;
+                
+                // Calcul des montants
+                const DIESEL_PRICE = 680;
+                const GASOLINE_PRICE = 920;
+                const amountDiesel = totalDiesel * DIESEL_PRICE;
+                const amountGasoline = totalGasoline * GASOLINE_PRICE;
+                const totalAmount = amountDiesel + amountGasoline;
+                
+                // Affichage du résumé
+                const summaryDiv = document.getElementById('dailySummaryContainer');
+                summaryDiv.innerHTML = `
+                    <div class="summary-card">
+                        <h4>⛽ Gazoil</h4>
+                        <div class="liters">${totalDiesel.toFixed(2)} L</div>
+                        <div class="amount">${amountDiesel.toLocaleString()} FCFA</div>
                     </div>
-                </div>
-                <div>📊 Niveau : ${percentage}% <span style="color: #666;">(reste ${volume} L)</span></div>
-                <div>📉 Vendu : ${vendu} L</div>
-                <div>🏭 Capacité initiale : ${initial} L</div>
-                <div>⚠️ Seuil d'alerte : ${tank.threshold_alert} L</div>
-                <div>🕐 Dernière mise à jour : ${new Date(tank.last_update).toLocaleString()}</div>
-                <div style="margin-top:10px;">
-                    <label>🔔 Nouveau seuil (litres) :</label>
-                    <input type="number" id="threshold_${tank.fuel_type}" value="${tank.threshold_alert}" step="100" style="width:120px;">
-                    <button onclick="updateThreshold('${tank.fuel_type}')">Enregistrer</button>
-                </div>
-            </div>
-        `;
-    });
-    container.innerHTML = html;
-}
-
-        async function updateThreshold(fuel_type) {
-            const input = document.getElementById(`threshold_${fuel_type}`);
-            const threshold_alert = parseFloat(input.value);
-            if (isNaN(threshold_alert)) return;
-            const res = await apiFetch('/api/tanks/threshold', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fuel_type, threshold_alert })
-            });
-            if (res && res.ok) {
-                alert('Seuil mis à jour');
-                loadTanks();
-            } else {
-                alert('Erreur lors de la mise à jour');
-            }
-        }
-
-        // ---- Initialisation du tableau de bord ----
-        async function initDashboard() {
-            await loadStationsForAdmin();
-            await loadPumps('dailyPump');
-            await loadPumps('weeklyPump');
-            await loadPumps('comparePump');
-            await loadPumps('statsPump');
-            await loadPumps('invoicePump');
-            await loadStationInfo();
-
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
-            const lastDay = new Date(year, month+1, 0).toISOString().split('T')[0];
-            document.getElementById('dailyStart').value = firstDay;
-            document.getElementById('dailyEnd').value = lastDay;
-            document.getElementById('statsStart').value = firstDay;
-            document.getElementById('statsEnd').value = lastDay;
-            document.getElementById('pumpStart').value = firstDay;
-            document.getElementById('pumpEnd').value = lastDay;
-            const currentMonth = `${year}-${String(month+1).padStart(2,'0')}`;
-            document.getElementById('compareMonth').value = currentMonth;
-            document.getElementById('invoiceMonth').value = currentMonth;
-            document.getElementById('weekYear').value = year;
-
-            await loadCurrentMonth();
-            await loadDaily();
-            await loadWeekly();
-            await loadComparison();
-            await loadStats();
-            await loadThresholds();
-            await loadPumpStats();
-            await loadTanks();
-            await checkAlerts();
-
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.removeEventListener('click', handleTabClick);
-                tab.addEventListener('click', handleTabClick);
-            });
-        }
-
-        function handleTabClick(e) {
-            const tab = e.currentTarget;
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
-        }
-
-        function toggleAutoRefresh() {
-            const btn = document.getElementById('autoRefreshBtn');
-            if (autoRefresh) {
-                clearInterval(autoRefreshInterval);
-                autoRefresh = false;
-                btn.textContent = '🔄 Auto OFF';
-                btn.classList.remove('active');
-            } else {
-                autoRefreshInterval = setInterval(() => {
-                    refreshAllData();
-                }, 30000);
-                autoRefresh = true;
-                btn.textContent = '🔄 Auto ON (30s)';
-                btn.classList.add('active');
-            }
-        }
-
-        async function loadCurrentMonth() {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth()+1).padStart(2,'0');
-            const res = await apiFetch(`/api/stats/monthly?year=${year}&month=${month}`);
-            if (!res) return;
-            const data = await res.json();
-            document.getElementById('currentMonthSummary').innerHTML = `
-                <div class="card"><h3>📆 Mois en cours</h3>
-                <div>⛽ Gazoil : ${data.diesel_liters.toFixed(2)} L</div>
-                <div>⛽ Essence : ${data.gasoline_liters.toFixed(2)} L</div>
-                <div><strong>💰 Total : ${data.total_fcfa.toLocaleString()} FCFA</strong></div></div>
-                <div class="card"><h3>💸 Détail coût</h3>
-                <div>Gazoil : ${data.cost_diesel.toLocaleString()} FCFA</div>
-                <div>Essence : ${data.cost_gasoline.toLocaleString()} FCFA</div></div>
-            `;
-        }
-
-        async function loadDaily() {
-            const start = document.getElementById('dailyStart').value;
-            const end = document.getElementById('dailyEnd').value;
-            const pumpId = document.getElementById('dailyPump').value;
-            if (!start || !end) return;
-            const url = `/api/stats/daily?start=${start}&end=${end}${pumpId ? '&pump_id='+pumpId : ''}`;
-            const res = await apiFetch(url);
-            if (!res) return;
-            const data = await res.json();
-            if (dailyChart) dailyChart.destroy();
-            const ctx = document.getElementById('dailyChart').getContext('2d');
-            dailyChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.dates,
-                    datasets: [
-                        { label: 'Gazoil (litres)', data: data.diesel, borderColor: '#e67e22', backgroundColor: 'rgba(230,126,34,0.1)', fill: true, tension: 0.2 },
-                        { label: 'Essence (litres)', data: data.gasoline, borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', fill: true, tension: 0.2 }
-                    ]
-                },
-                options: { responsive: true, scales: { y: { beginAtZero: true, title: { display: true, text: 'Litres' } } } }
-            });
-        }
-
-        async function loadWeekly() {
-            const year = document.getElementById('weekYear').value;
-            const pumpId = document.getElementById('weeklyPump').value;
-            const url = `/api/stats/weekly?year=${year}${pumpId ? '&pump_id='+pumpId : ''}`;
-            const res = await apiFetch(url);
-            if (!res) return;
-            const data = await res.json();
-            if (weeklyChart) weeklyChart.destroy();
-            const ctx = document.getElementById('weeklyChart').getContext('2d');
-            weeklyChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.weeks.map(w => `Semaine ${w}`),
-                    datasets: [
-                        { label: 'Gazoil (L)', data: data.diesel, backgroundColor: '#e67e22' },
-                        { label: 'Essence (L)', data: data.gasoline, backgroundColor: '#3498db' }
-                    ]
-                },
-                options: { responsive: true, scales: { y: { beginAtZero: true } } }
-            });
-        }
-
-        async function loadComparison() {
-            const month = document.getElementById('compareMonth').value;
-            const pumpId = document.getElementById('comparePump').value;
-            if (!month) return;
-            const [year, monthNum] = month.split('-');
-            const url = `/api/stats/monthly_comparison?year=${year}&month=${monthNum}${pumpId ? '&pump_id='+pumpId : ''}`;
-            const res = await apiFetch(url);
-            if (!res) return;
-            const data = await res.json();
-            document.getElementById('comparisonResult').innerHTML = `
-                <div class="card"><h3>📆 Mois sélectionné</h3><div class="value">${data.current.toFixed(2)} L</div></div>
-                <div class="card"><h3>📅 Mois précédent</h3><div class="value">${data.previous.toFixed(2)} L</div></div>
-                <div class="card"><h3>📈 Variation</h3><div class="value">${data.variation > 0 ? '+' : ''}${data.variation.toFixed(2)} L (${data.variation_percent.toFixed(1)}%)</div></div>
-            `;
-        }
-
-        async function loadStats() {
-            const start = document.getElementById('statsStart').value;
-            const end = document.getElementById('statsEnd').value;
-            const pumpId = document.getElementById('statsPump').value;
-            if (!start || !end) return;
-            const url = `/api/stats/average_max?start=${start}&end=${end}${pumpId ? '&pump_id='+pumpId : ''}`;
-            const res = await apiFetch(url);
-            if (!res) return;
-            const data = await res.json();
-            document.getElementById('statsResult').innerHTML = `
-                <div class="card"><h3>📊 Moyenne journalière</h3><div class="value">${data.avg_liters_per_day} L</div></div>
-                <div class="card"><h3>📈 Maximum journalier</h3><div class="value">${data.max_liters_per_day} L</div></div>
-            `;
-        }
-
-        async function loadThresholds() {
-            const res = await apiFetch('/api/thresholds');
-            if (!res) return;
-            const data = await res.json();
-            document.getElementById('dieselThreshold').value = data.diesel_threshold;
-            document.getElementById('gasolineThreshold').value = data.gasoline_threshold;
-        }
-
-        async function saveThresholds() {
-            const diesel = parseFloat(document.getElementById('dieselThreshold').value);
-            const gasoline = parseFloat(document.getElementById('gasolineThreshold').value);
-            if (isNaN(diesel) || isNaN(gasoline)) return;
-            const res = await apiFetch('/api/thresholds', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ diesel_threshold: diesel, gasoline_threshold: gasoline })
-            });
-            if (res && res.ok) {
-                document.getElementById('thresholdStatus').innerText = '✅ Seuils enregistrés';
-                setTimeout(() => document.getElementById('thresholdStatus').innerText = '', 2000);
-                checkAlerts();
-            }
-        }
-
-        async function checkAlerts() {
-            const resThreshold = await apiFetch('/api/thresholds');
-            if (!resThreshold) return;
-            const thresholds = await resThreshold.json();
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth()+1).padStart(2,'0');
-            const resMonth = await apiFetch(`/api/stats/monthly?year=${year}&month=${month}`);
-            if (!resMonth) return;
-            const monthData = await resMonth.json();
-            const alerts = [];
-            if (monthData.diesel_liters > thresholds.diesel_threshold) alerts.push(`⚠️ Gazoil : ${monthData.diesel_liters} L dépasse le seuil (${thresholds.diesel_threshold} L)`);
-            if (monthData.gasoline_liters > thresholds.gasoline_threshold) alerts.push(`⚠️ Essence : ${monthData.gasoline_liters} L dépasse le seuil (${thresholds.gasoline_threshold} L)`);
-            const alertDiv = document.getElementById('alertMessage');
-            if (alerts.length) {
-                alertDiv.innerHTML = alerts.join('<br>');
-                alertDiv.style.display = 'block';
-            } else alertDiv.style.display = 'none';
-        }
-
-        async function loadInvoice() {
-            const month = document.getElementById('invoiceMonth').value;
-            const pumpId = document.getElementById('invoicePump').value;
-            if (!month) return;
-            const [year, monthNum] = month.split('-');
-            let url = `/api/stats/monthly?year=${year}&month=${monthNum}`;
-            if (pumpId) url += `&pump_id=${pumpId}`;
-            const res = await apiFetch(url);
-            if (!res) return;
-            const data = await res.json();
-            const date = new Date(year, monthNum-1, 1);
-            const monthName = date.toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
-            document.getElementById('invoiceResult').innerHTML = `
-                <div style="border:1px solid #ddd;border-radius:8px;padding:20px;">
-                    <h2 style="text-align:center;">FACTURE MENSUELLE</h2>
-                    <p style="text-align:center;">${monthName}</p><hr>
-                    <div><strong>⛽ Gazoil</strong> : ${data.diesel_liters.toFixed(2)} L → ${data.cost_diesel.toLocaleString()} FCFA</div>
-                    <div><strong>⛽ Essence</strong> : ${data.gasoline_liters.toFixed(2)} L → ${data.cost_gasoline.toLocaleString()} FCFA</div>
-                    <hr><div style="font-size:20px;font-weight:bold;">TOTAL TTC : ${data.total_fcfa.toLocaleString()} FCFA</div>
-                    <p style="font-size:12px;">Tarifs : Gazoil 680 FCFA/L, Essence 920 FCFA/L</p>
-                </div>
-            `;
-        }
-
-        async function loadPumpStats() {
-            const start = document.getElementById('pumpStart').value;
-            const end = document.getElementById('pumpEnd').value;
-            if (!start || !end) return;
-            const res = await apiFetch(`/api/stats/pumps?start=${start}&end=${end}`);
-            if (!res) return;
-            const data = await res.json();
-            if (data.length === 0) {
-                document.getElementById('pumpStatsResult').innerHTML = '<div class="card">Aucune donnée sur cette période</div>';
-                return;
-            }
-            let html = '';
-            let totalLiters = 0;
-            let totalAmount = 0;
-            data.forEach(p => {
-                totalLiters += p.liters;
-                totalAmount += p.amount;
-                html += `
-                    <div class="card">
-                        <h3>Pompe ${p.pump_number} (${p.fuel_type === 'diesel' ? 'Gazoil' : 'Essence'})</h3>
-                        <div class="value">${p.liters.toFixed(2)} L</div>
-                        <div>💰 ${p.amount.toLocaleString()} FCFA</div>
+                    <div class="summary-card">
+                        <h4>⛽ Essence</h4>
+                        <div class="liters">${totalGasoline.toFixed(2)} L</div>
+                        <div class="amount">${amountGasoline.toLocaleString()} FCFA</div>
+                    </div>
+                    <div class="summary-card total">
+                        <h4>💰 TOTAL PÉRIODE</h4>
+                        <div class="liters">${(totalDiesel + totalGasoline).toFixed(2)} L</div>
+                        <div class="amount">${totalAmount.toLocaleString()} FCFA</div>
                     </div>
                 `;
-            });
-            html += `
-                <div class="card" style="background:#e67e22; color:white;">
-                    <h3>📊 TOTAL STATION</h3>
-                    <div class="value">${totalLiters.toFixed(2)} L</div>
-                    <div>💰 ${totalAmount.toLocaleString()} FCFA</div>
-                </div>
-            `;
-            document.getElementById('pumpStatsResult').innerHTML = html;
-        }
+                
+                await updateIoTChart();
+            }
 
-        async function exportPDF() {
-            const { jsPDF } = window.jspdf;
-            const element = document.getElementById('reportContent');
-            try {
-                const canvas = await html2canvas(element, { scale: 2 });
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const imgWidth = 190;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
-                pdf.save('rapport_station.pdf');
-            } catch (err) { alert('Erreur génération PDF'); }
-        }
-
-        async function exportInvoicePDF() {
-            const invoiceDiv = document.getElementById('invoiceResult');
-            if (!invoiceDiv.innerHTML.trim()) { alert("Calculez d'abord la facture."); return; }
-            const temp = document.createElement('div');
-            temp.style.padding = '20px';
-            temp.style.backgroundColor = 'white';
-            temp.style.width = '800px';
-            temp.appendChild(invoiceDiv.cloneNode(true));
-            document.body.appendChild(temp);
-            try {
-                const { jsPDF } = window.jspdf;
-                const canvas = await html2canvas(temp, { scale: 2 });
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const imgWidth = 190;
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
-                pdf.save('facture_carburant.pdf');
-            } catch (err) { alert('Erreur PDF facture'); }
-            finally { document.body.removeChild(temp); }
-        }
-
-        document.getElementById('password').addEventListener('keypress', e => { if(e.key === 'Enter') login(); });
-        checkAuth();
-
-        async function checkAuth() {
-            const res = await apiFetch('/api/check_auth');
-            if (res && res.ok) {
+            // ---------- GRAPHIQUE HEBDOMADAIRE ----------
+            async function loadWeekly(){
+                const year = document.getElementById('weekYear').value;
+                const pumpId = document.getElementById('weeklyPump').value;
+                let url = `/api/stats/weekly?year=${year}`;
+                if(pumpId) url += `&pump_id=${pumpId}`;
+                const res = await apiFetch(url);
+                if(!res) return;
                 const data = await res.json();
-                if (data.authenticated) {
-                    currentUserRole = data.role;
-                    document.getElementById('loginContainer').style.display = 'none';
-                    document.getElementById('dashboardContainer').style.display = 'block';
-                    initDashboard();
+                if(!data.weeks || data.weeks.length === 0) return;
+                const ctx = document.getElementById('weeklyChart').getContext('2d');
+                if(weeklyChart) weeklyChart.destroy();
+                weeklyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.weeks.map(w => `Semaine ${w}`),
+                        datasets: [
+                            { label: 'Gazoil (L)', data: data.diesel, backgroundColor: '#e67e22' },
+                            { label: 'Essence (L)', data: data.gasoline, backgroundColor: '#3498db' }
+                        ]
+                    },
+                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                });
+            }
+
+            // ---------- COMPARAISON MENSUELLE ----------
+            async function loadComparison(){
+                const month = document.getElementById('compareMonth').value;
+                const pumpId = document.getElementById('comparePump').value;
+                if(!month) return;
+                const [year, monthNum] = month.split('-');
+                let url = `/api/stats/monthly_comparison?year=${year}&month=${monthNum}`;
+                if(pumpId) url += `&pump_id=${pumpId}`;
+                const res = await apiFetch(url);
+                if(!res) return;
+                const data = await res.json();
+                const container = document.getElementById('comparisonResult');
+                if(container){
+                    container.innerHTML = `
+                        <div class="card"><h3>📆 Mois sélectionné</h3><div class="value">${data.current.toFixed(2)} L</div></div>
+                        <div class="card"><h3>📅 Mois précédent</h3><div class="value">${data.previous.toFixed(2)} L</div></div>
+                        <div class="card"><h3>📈 Variation</h3><div class="value">${data.variation > 0 ? '+' : ''}${data.variation.toFixed(2)} L (${data.variation_percent.toFixed(1)}%)</div></div>
+                    `;
                 }
             }
-        }
+
+            // ---------- STATS MOYENNES/MAX ----------
+            async function loadStats(){
+                const start = document.getElementById('statsStart').value;
+                const end = document.getElementById('statsEnd').value;
+                const pumpId = document.getElementById('statsPump').value;
+                if(!start || !end) return;
+                let url = `/api/stats/average_max?start=${start}&end=${end}`;
+                if(pumpId) url += `&pump_id=${pumpId}`;
+                const res = await apiFetch(url);
+                if(!res) return;
+                const data = await res.json();
+                const container = document.getElementById('statsResult');
+                if(container){
+                    container.innerHTML = `
+                        <div class="card"><h3>📊 Moyenne journalière</h3><div class="value">${data.avg_liters_per_day} L</div></div>
+                        <div class="card"><h3>📈 Maximum journalier</h3><div class="value">${data.max_liters_per_day} L</div></div>
+                    `;
+                }
+            }
+
+            // ---------- SEUILS D'ALERTE ----------
+            async function loadThresholds(){
+                const res = await apiFetch('/api/thresholds');
+                if(!res) return;
+                const data = await res.json();
+                document.getElementById('dieselThreshold').value = data.diesel_threshold;
+                document.getElementById('gasolineThreshold').value = data.gasoline_threshold;
+            }
+
+            async function saveThresholds(){
+                const diesel = parseFloat(document.getElementById('dieselThreshold').value);
+                const gasoline = parseFloat(document.getElementById('gasolineThreshold').value);
+                if(isNaN(diesel) || isNaN(gasoline)) return;
+                const res = await apiFetch('/api/thresholds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ diesel_threshold: diesel, gasoline_threshold: gasoline })
+                });
+                if(res && res.ok){
+                    const status = document.getElementById('thresholdStatus');
+                    if(status){
+                        status.innerText = '✅ Seuils enregistrés';
+                        setTimeout(() => status.innerText = '', 2000);
+                    }
+                    await checkAlerts();
+                }
+            }
+
+            // ---------- ALERTES ----------
+            async function checkAlerts(){
+                const resThreshold = await apiFetch('/api/thresholds');
+                if(!resThreshold) return;
+                const thresholds = await resThreshold.json();
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth()+1).padStart(2,'0');
+                const resMonth = await apiFetch(`/api/stats/monthly?year=${year}&month=${month}`);
+                if(!resMonth) return;
+                const monthData = await resMonth.json();
+                const alerts = [];
+                if(monthData.diesel_liters > thresholds.diesel_threshold) alerts.push(`⚠️ Gazoil : ${monthData.diesel_liters} L dépasse le seuil (${thresholds.diesel_threshold} L)`);
+                if(monthData.gasoline_liters > thresholds.gasoline_threshold) alerts.push(`⚠️ Essence : ${monthData.gasoline_liters} L dépasse le seuil (${thresholds.gasoline_threshold} L)`);
+                const alertDiv = document.getElementById('alertMessage');
+                if(alertDiv){
+                    if(alerts.length){
+                        alertDiv.innerHTML = alerts.join('<br>');
+                        alertDiv.style.display = 'block';
+                    } else alertDiv.style.display = 'none';
+                }
+            }
+
+            // ---------- FACTURE ----------
+            async function loadInvoice(){
+                const month = document.getElementById('invoiceMonth').value;
+                const pumpId = document.getElementById('invoicePump').value;
+                if(!month) return;
+                const [year, monthNum] = month.split('-');
+                let url = `/api/stats/monthly?year=${year}&month=${monthNum}`;
+                if(pumpId) url += `&pump_id=${pumpId}`;
+                const res = await apiFetch(url);
+                if(!res) return;
+                const data = await res.json();
+                const date = new Date(year, monthNum-1, 1);
+                const monthName = date.toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
+                const invoiceDiv = document.getElementById('invoiceResult');
+                if(invoiceDiv){
+                    invoiceDiv.innerHTML = `
+                        <div style="border:1px solid #ddd;border-radius:12px;padding:20px;">
+                            <h2 style="text-align:center;">FACTURE MENSUELLE</h2>
+                            <p style="text-align:center;">${monthName}</p><hr>
+                            <div><strong>⛽ Gazoil</strong> : ${data.diesel_liters.toFixed(2)} L → ${data.cost_diesel.toLocaleString()} FCFA</div>
+                            <div><strong>⛽ Essence</strong> : ${data.gasoline_liters.toFixed(2)} L → ${data.cost_gasoline.toLocaleString()} FCFA</div>
+                            <hr><div style="font-size:20px;font-weight:bold;">TOTAL TTC : ${data.total_fcfa.toLocaleString()} FCFA</div>
+                            <p style="font-size:12px;">Tarifs : Gazoil 680 FCFA/L, Essence 920 FCFA/L</p>
+                        </div>
+                    `;
+                }
+            }
+
+            // ---------- STATISTIQUES PAR POMPE ----------
+            async function loadPumpStats(){
+                const start = document.getElementById('pumpStart').value;
+                const end = document.getElementById('pumpEnd').value;
+                if(!start || !end) return;
+                const res = await apiFetch(`/api/stats/pumps?start=${start}&end=${end}`);
+                if(!res) return;
+                const data = await res.json();
+                const container = document.getElementById('pumpStatsResult');
+                if(!container) return;
+                if(data.length === 0){
+                    container.innerHTML = '<div class="card">Aucune donnée sur cette période</div>';
+                    return;
+                }
+                let html = '', totalLiters = 0, totalAmount = 0;
+                data.forEach(p => {
+                    totalLiters += p.liters;
+                    totalAmount += p.amount;
+                    html += `<div class="card"><h3>Pompe ${p.pump_number} (${p.fuel_type === 'diesel' ? 'Gazoil' : 'Essence'})</h3><div class="value">${p.liters.toFixed(2)} L</div><div>💰 ${p.amount.toLocaleString()} FCFA</div></div>`;
+                });
+                html += `<div class="card" style="background:#e67e22; color:white;"><h3>📊 TOTAL STATION</h3><div class="value">${totalLiters.toFixed(2)} L</div><div>💰 ${totalAmount.toLocaleString()} FCFA</div></div>`;
+                container.innerHTML = html;
+            }
+
+            // ---------- RÉSERVOIRS ----------
+            async function loadTanks(){
+                const res = await apiFetch('/api/tanks');
+                if(!res) return;
+                const tanks = await res.json();
+                const container = document.getElementById('tanksContainer');
+                if(!container) return;
+                if(tanks.length === 0){
+                    container.innerHTML = '<div class="card">Aucun réservoir configuré pour cette station.</div>';
+                    return;
+                }
+                let html = '';
+                tanks.forEach(tank => {
+                    const fuelLabel = tank.fuel_type === 'diesel' ? 'Gazoil' : 'Essence';
+                    const volume = parseFloat(tank.last_known_volume).toFixed(2);
+                    const initial = parseFloat(tank.initial_volume).toFixed(2);
+                    const percentage = (volume / initial * 100).toFixed(1);
+                    const vendu = (initial - volume).toFixed(2);
+                    const barColor = volume <= tank.threshold_alert ? '#e74c3c' : (tank.fuel_type === 'diesel' ? '#e67e22' : '#3498db');
+                    html += `<div class="card" ${volume <= tank.threshold_alert ? 'style="border-left-color: red;"' : ''}>
+                        <h3>${fuelLabel}</h3><div class="value">${volume} L</div>
+                        <div style="background:#eee; border-radius:10px; height:20px; margin:10px 0;"><div style="background:${barColor}; width:${percentage}%; height:20px; border-radius:10px; text-align:center; color:white; line-height:20px; font-size:12px;">${percentage}%</div></div>
+                        <div>📊 Niveau : ${percentage}% <span style="color:#666;">(reste ${volume} L)</span></div>
+                        <div>📉 Vendu : ${vendu} L</div><div>🏭 Capacité initiale : ${initial} L</div>
+                        <div>⚠️ Seuil d'alerte : ${tank.threshold_alert} L</div>
+                        <div>🕐 Dernière mise à jour : ${new Date(tank.last_update).toLocaleString()}</div>
+                        <div style="margin-top:10px;"><label>🔔 Nouveau seuil :</label><input type="number" id="threshold_${tank.fuel_type}" value="${tank.threshold_alert}" step="100" style="width:120px;"><button class="update-threshold-btn" data-fuel="${tank.fuel_type}">Enregistrer</button></div>
+                    </div>`;
+                });
+                container.innerHTML = html;
+                document.querySelectorAll('.update-threshold-btn').forEach(btn => {
+                    btn.removeEventListener('click', updateThresholdHandler);
+                    btn.addEventListener('click', updateThresholdHandler);
+                });
+            }
+
+            async function updateThresholdHandler(e){
+                const fuel_type = e.currentTarget.getAttribute('data-fuel');
+                const input = document.getElementById(`threshold_${fuel_type}`);
+                const threshold_alert = parseFloat(input.value);
+                if(isNaN(threshold_alert)) return;
+                const res = await apiFetch('/api/tanks/threshold', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fuel_type, threshold_alert })
+                });
+                if(res && res.ok){
+                    alert('Seuil mis à jour');
+                    await loadTanks();
+                    await loadIoTDashboard();
+                } else alert('Erreur lors de la mise à jour');
+            }
+
+            // ---------- EXPORTS PDF ----------
+            async function exportPDF(){
+                const { jsPDF } = window.jspdf;
+                const element = document.getElementById('reportContent');
+                if(!element) return;
+                try{
+                    const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff' });
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgWidth = 190;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                    pdf.save('rapport_station.pdf');
+                } catch(err){ alert('Erreur génération PDF'); }
+            }
+
+            async function exportInvoicePDF(){
+                const invoiceDiv = document.getElementById('invoiceResult');
+                if(!invoiceDiv || !invoiceDiv.innerHTML.trim()){ alert("Calculez d'abord la facture."); return; }
+                const temp = document.createElement('div');
+                temp.style.padding = '20px';
+                temp.style.backgroundColor = 'white';
+                temp.style.width = '800px';
+                temp.appendChild(invoiceDiv.cloneNode(true));
+                document.body.appendChild(temp);
+                try{
+                    const { jsPDF } = window.jspdf;
+                    const canvas = await html2canvas(temp, { scale: 2 });
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgWidth = 190;
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                    pdf.save('facture_carburant.pdf');
+                } catch(err){ alert('Erreur PDF facture'); }
+                finally{ document.body.removeChild(temp); }
+            }
+
+            // ---------- RAFRAÎCHISSEMENT PÉRIODIQUE ----------
+            async function refreshAllData(){
+                showLoading(true);
+                try{
+                    await Promise.all([
+                        loadStationInfo(),
+                        loadIoTDashboard(),
+                        loadCurrentMonth(),
+                        loadDaily(),
+                        loadWeekly(),
+                        loadComparison(),
+                        loadStats(),
+                        loadPumpStats(),
+                        loadThresholds(),
+                        loadTanks(),
+                        loadInvoice(),
+                        checkAlerts(),
+                        loadPumps('dailyPump'),
+                        loadPumps('weeklyPump'),
+                        loadPumps('comparePump'),
+                        loadPumps('statsPump'),
+                        loadPumps('invoicePump')
+                    ]);
+                } catch(e){
+                    console.error('Erreur refreshAllData', e);
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            function toggleAutoRefresh(){
+                const btn = document.getElementById('autoRefreshBtn');
+                if(autoRefresh){
+                    clearInterval(autoRefreshInterval);
+                    autoRefresh = false;
+                    if(btn){ btn.textContent = '🔄 Auto OFF'; btn.classList.remove('active'); }
+                } else {
+                    autoRefreshInterval = setInterval(refreshAllData, 30000);
+                    autoRefresh = true;
+                    if(btn){ btn.textContent = '🔄 Auto ON (30s)'; btn.classList.add('active'); }
+                }
+            }
+
+            // ---------- GESTION DES ONGLETS ----------
+            function initTabs(){
+                const tabs = document.querySelectorAll('.tab');
+                const contents = document.querySelectorAll('.tab-content');
+                tabs.forEach(tab => {
+                    tab.removeEventListener('click', () => {});
+                    tab.addEventListener('click', () => {
+                        const targetId = tab.getAttribute('data-tab');
+                        tabs.forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        contents.forEach(c => c.classList.remove('active'));
+                        const target = document.getElementById(targetId);
+                        if(target) target.classList.add('active');
+                    });
+                });
+            }
+
+            // ---------- INITIALISATION DES BOUTONS D'ACTION ----------
+            function initActionButtons(){
+                document.querySelectorAll('.action-btn').forEach(btn => {
+                    const action = btn.getAttribute('data-action');
+                    btn.removeEventListener('click', () => {});
+                    btn.addEventListener('click', async () => {
+                        switch(action){
+                            case 'daily': await loadDaily(); break;
+                            case 'weekly': await loadWeekly(); break;
+                            case 'comparison': await loadComparison(); break;
+                            case 'pumpStats': await loadPumpStats(); break;
+                            case 'invoice': await loadInvoice(); break;
+                            case 'stats': await loadStats(); break;
+                            default: break;
+                        }
+                    });
+                });
+                document.querySelectorAll('.export').forEach(btn => {
+                    const exportType = btn.getAttribute('data-export');
+                    btn.removeEventListener('click', () => {});
+                    btn.addEventListener('click', async () => {
+                        if(exportType === 'pdf') await exportPDF();
+                        else if(exportType === 'invoicePDF') await exportInvoicePDF();
+                    });
+                });
+                const saveBtn = document.getElementById('saveThresholdsBtn');
+                if(saveBtn){
+                    saveBtn.removeEventListener('click', saveThresholds);
+                    saveBtn.addEventListener('click', saveThresholds);
+                }
+                const autoBtn = document.getElementById('autoRefreshBtn');
+                if(autoBtn){
+                    autoBtn.removeEventListener('click', toggleAutoRefresh);
+                    autoBtn.addEventListener('click', toggleAutoRefresh);
+                }
+                const applyStationBtn = document.getElementById('applyStationBtn');
+                if(applyStationBtn) applyStationBtn.addEventListener('click', changeStation);
+            }
+
+            // ---------- INITIALISATION DU TABLEAU DE BORD ----------
+            async function initDashboard(){
+                await loadStationsForAdmin();
+                await loadPumps('dailyPump');
+                await loadPumps('weeklyPump');
+                await loadPumps('comparePump');
+                await loadPumps('statsPump');
+                await loadPumps('invoicePump');
+                await loadStationInfo();
+
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth();
+                const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+                const lastDay = new Date(year, month+1, 0).toISOString().split('T')[0];
+                document.getElementById('dailyStart').value = firstDay;
+                document.getElementById('dailyEnd').value = lastDay;
+                document.getElementById('statsStart').value = firstDay;
+                document.getElementById('statsEnd').value = lastDay;
+                document.getElementById('pumpStart').value = firstDay;
+                document.getElementById('pumpEnd').value = lastDay;
+                document.getElementById('compareMonth').value = `${year}-${String(month+1).padStart(2,'0')}`;
+                document.getElementById('invoiceMonth').value = `${year}-${String(month+1).padStart(2,'0')}`;
+                document.getElementById('weekYear').value = year;
+
+                await refreshAllData();
+                initTabs();
+                initActionButtons();
+            }
+
+            // ---------- VÉRIFICATION AUTH ----------
+            (async function checkAuth(){
+                const res = await apiFetch('/api/check_auth');
+                if(res && res.ok){
+                    const data = await res.json();
+                    if(data.authenticated){
+                        currentUserRole = data.role;
+                        document.getElementById('loginContainer').style.display = 'none';
+                        document.getElementById('dashboardContainer').style.display = 'block';
+                        initDashboard();
+                    }
+                }
+            })();
+
+            // ---------- ATTACHEMENT DES BOUTONS ----------
+            const loginBtn = document.getElementById('loginBtn');
+            if(loginBtn) loginBtn.addEventListener('click', login);
+            const logoutBtn = document.getElementById('logoutBtn');
+            if(logoutBtn) logoutBtn.addEventListener('click', logout);
+        })();
     </script>
 </body>
 </html>
